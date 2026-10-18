@@ -20,9 +20,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
+      # Android SDK is preinstalled on GitHub runners (platforms 34/35,
+      # build-tools, licenses accepted) — no setup action needed. The
+      # android-actions/setup-android@v3 action currently fails trying to
+      # install the obsolete 'tools' package that Google removed.
       - name: Set up Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
