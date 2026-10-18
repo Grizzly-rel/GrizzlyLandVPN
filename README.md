@@ -84,7 +84,11 @@ git clone https://github.com/Grizzly-rel/GrizzlyLandVPN.git
 cd GrizzlyLandVPN
 git submodule update --init   # checks out native/xray-core @ 7da5dae
 cd native/libxray             # go.mod already points at ../xray-core
-gomobile bind -target=android -androidapi 24 -o ../../app/libs/libxray.aar .
+# -checklinkname=0 is required: github.com/wlynxg/anet (a dependency of the
+# tun proxy) uses go:linkname into the net package, which the linker refuses
+# by default. The app itself is arm64-v8a only.
+gomobile bind -target=android/arm64 -androidapi 24 \
+    -ldflags="-checklinkname=0" -o ../../app/libs/libxray.aar .
 ```
 
 Any other Xray-core version works as the replace target too — the wrapper only
