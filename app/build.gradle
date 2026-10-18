@@ -33,7 +33,12 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.release
+            // Release signing needs keystore/keystore.properties (outside the repo,
+            // see .gitignore). Without it (fresh clone, CI) fall back to debug
+            // signing so `gradle assembleRelease` still produces an installable APK.
+            signingConfig rootProject.file("keystore/keystore.properties").exists()
+                    ? signingConfigs.release
+                    : signingConfigs.debug
         }
         debug {
             signingConfig signingConfigs.debug
