@@ -28,7 +28,7 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Build release APK (debug-signed: the release keystore is not in CI)
+      - name: "Build release APK (debug-signed: the release keystore is not in CI)"
         run: gradle assembleRelease --no-daemon
 
       - name: Signer info
