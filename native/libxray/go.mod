@@ -58,6 +58,6 @@ require (
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
 
-replace github.com/xtls/xray-core => /opt/xray-src
+replace github.com/xtls/xray-core => ../xray-core
 
 tool golang.org/x/mobile/cmd/gobind

@@ -57,7 +57,7 @@ Three binaries are committed so the project builds out of the box. Their origin:
 
 | File | What it is | Origin |
 |------|-----------|--------|
-| `app/libs/libxray.aar` | gomobile binding of Xray-core exposing `SetTunFd` / `Run` / `Stop` / `Version` | Built with `gomobile bind` from the wrapper committed under [`native/libxray/`](native/libxray) against a locally patched Xray-core (see below) |
+| `app/libs/libxray.aar` | gomobile binding of Xray-core exposing `SetTunFd` / `Run` / `Stop` / `Version` | Built with `gomobile bind` from the wrapper committed under [`native/libxray/`](native/libxray) against **pristine upstream Xray-core pinned at commit `7da5dae`** — git submodule [`native/xray-core`](native/xray-core), see below |
 | `app/src/main/jniLibs/arm64-v8a/libopenvpn.so` | OpenVPN **2.6.14** for Android (`TARGET_ANDROID`), built without LZO/LZ4 | Built from the upstream OpenVPN sources; receives the TUN fd through the management interface (`OPENTUN` + `SCM_RIGHTS`) |
 | `app/libs/jsch-2.28.0.jar` | JSch SSH client (mwiede fork) | Unmodified Maven Central artifact `com.github.mwiede:jsch:2.28.0` (SHA-1 verified against Maven Central) |
 
@@ -69,22 +69,27 @@ Notes on `libxray.aar`:
   [`native/libxray/libxray.go`](native/libxray/libxray.go). It passes the Android
   TUN file descriptor to the Xray core through the `xray.tun.fd` environment
   variable and starts/stops the core with a JSON config — nothing else.
-- It was linked against a local Xray-core checkout (commit `7da5dae` at build
-  time) with a gVisor-based `tun` inbound and fullcone UDP support. That patched
-  fork is not part of this repository.
+- It links against **upstream Xray-core pinned at commit `7da5dae`** — no local
+  patches. At that commit Xray-core itself ships the TUN inbound on the gVisor
+  stack (`proxy/tun/stack_gvisor.go`), fullcone UDP handling
+  (`proxy/tun/udp_fullcone.go`) and reads the TUN fd from the `xray.tun.fd`
+  environment variable (`common/platform/platform.go`). Upstream `main` has
+  already diverged from this state, which is why the exact commit is pinned as
+  a submodule.
 
 Reproducing `libxray.aar`:
 
 ```bash
-git clone https://github.com/XTLS/Xray-core.git
-mkdir libxray && cp <this repo>/native/libxray/* libxray/
-# point the `replace github.com/xtls/xray-core => ...` line in libxray/go.mod
-# at your Xray-core checkout (stock or patched — the wrapper only needs
-# core.StartInstance())
-cd libxray
-gomobile bind -target=android -androidapi 24 -o libxray.aar .
-cp libxray.aar <this repo>/app/libs/libxray.aar
+git clone https://github.com/Grizzly-rel/GrizzlyLandVPN.git
+cd GrizzlyLandVPN
+git submodule update --init   # checks out native/xray-core @ 7da5dae
+cd native/libxray             # go.mod already points at ../xray-core
+gomobile bind -target=android -androidapi 24 -o ../../app/libs/libxray.aar .
 ```
+
+Any other Xray-core version works as the replace target too — the wrapper only
+needs `core.StartInstance()`; the pin just records the exact state the shipped
+`.aar` was built from.
 
 For `libopenvpn.so` no build script is included in this repository; any OpenVPN
 2.6.x Android build compiled with `TARGET_ANDROID` (management-interface TUN
