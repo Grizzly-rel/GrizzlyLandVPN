@@ -1,0 +1,22 @@
+# Секреты и ключи подписи — НИКОГДА не публиковать
+keystore/
+*.jks
+*.keystore
+keystore.properties
+
+# Сборка и кэши
+build/
+.gradle/
+local.properties
+app/build/
+
+# IDE
+*.iml
+.idea/
+.vscode/
+
+# Локальные дампы настроек (секреты!)
+/cubot_config.xml
+/phone_config.xml
+/phone_config_ip.xml
+/phone_config_local.xml

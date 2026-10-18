@@ -1,0 +1,53 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.grizzlyland.vpn'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.grizzlyland.vpn"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    signingConfigs {
+        release {
+            // Пароли подписи — в keystore/keystore.properties (вне репозитория,
+            // см. .gitignore). В коде их больше нет.
+            def ksProps = new Properties()
+            def ksPropsFile = rootProject.file("keystore/keystore.properties")
+            if (ksPropsFile.exists()) {
+                ksPropsFile.withInputStream { ksProps.load(it) }
+                storeFile file(ksProps['storeFile'])
+                storePassword ksProps['storePassword']
+                keyAlias ksProps['keyAlias']
+                keyPassword ksProps['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+        debug {
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation files('libs/libxray.aar')
+    // SSH-клиент (mwiede-форк jsch) для режима «OpenVPN через SSH».
+    implementation files('libs/jsch-2.28.0.jar')
+}
