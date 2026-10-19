@@ -51,6 +51,10 @@ public class GrizzlyLandVpnService extends VpnService {
      *  (UDP-сокеты движка перепривязываются). */
     private android.net.ConnectivityManager.NetworkCallback wgNetCallback;
     private android.net.Network wgLastNetwork;
+    /** Эпоха старта: инвалидирует асинхронный старт WG-через-Xray при
+     *  disconnect/реконнекте (резолв endpoint'а идёт в рабочем потоке). */
+    private final java.util.concurrent.atomic.AtomicInteger startEpoch =
+            new java.util.concurrent.atomic.AtomicInteger(0);
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -99,6 +103,7 @@ public class GrizzlyLandVpnService extends VpnService {
                     + (openVpnRunner.isRunning() ? "openvpn живой" : "openvpn не запущен") + ")");
             return;
         }
+        startEpoch.incrementAndGet();
         try {
             String mode = config.getMode();
             lastError = "";
@@ -350,34 +355,70 @@ public class GrizzlyLandVpnService extends VpnService {
         LogStore.add("Service", "WG-через-Xray: endpoint=" + cfg.endpointForLog
                 + " адресов=" + cfg.addresses.size() + " peer=" + cfg.peers
                 + " mtu=" + (cfg.mtu > 0 ? cfg.mtu : 1420));
-        vpnInterface = buildBuilder(null, 1400, null, null).establish();
-        if (vpnInterface == null) {
-            LogStore.add("Service", "ОШИБКА: VpnService не разрешил TUN (WG через Xray)");
-            lastError = "VpnService не разрешил TUN";
-            broadcastState();
-            stopSelf();
-            return;
-        }
-        try {
-            String logDir = getFilesDir().getAbsolutePath();
-            xrayRunner.startTunWg(config, vpnInterface.getFd(), logDir);
-            connected = true;
-            broadcastState();
-            // UDP-сокет WG живёт внутри Xray: при смене сети пересоздаём туннель
-            // целиком (тот же NetworkCallback, что у режима WireGuard).
-            registerWgNetworkCallback();
-        } catch (Exception e) {
-            Log.e(TAG, "Xray WG start failed", e);
-            LogStore.add("Service", "ОШИБКА запуска Xray (WG через Xray): " + e);
-            lastError = e.getMessage();
-            connected = false;
-            broadcastState();
+        // Резолв домена endpoint'а делаем в РАБОЧЕМ потоке (сетевые операции
+        // запрещены на главном) и ДО создания TUN: при живом туннеле резолв
+        // уходит в VPN-заглушку DNS и ломается, а внутри Xray получилась бы
+        // петля «резолв через несозданный WG-туннель».
+        final int myEpoch = startEpoch.get();
+        final String epRaw = cfg.peerList.get(0).endpoint;
+        final android.os.ParcelFileDescriptor[] holder = new android.os.ParcelFileDescriptor[1];
+        new Thread(() -> {
             try {
-                vpnInterface.close();
-            } catch (Exception ignored) {
+                String resolvedEndpoint = XrayConfigBuilder.resolveWgEndpoint(epRaw);
+                if (startEpoch.get() != myEpoch) {
+                    LogStore.add("Service", "Старт WG-через-Xray отменён (состояние изменилось)");
+                    return;
+                }
+                LogStore.add("Service", "WG endpoint: " + epRaw + " -> " + resolvedEndpoint);
+                ParcelFileDescriptor tun = buildBuilder(null, 1400, null, null).establish();
+                if (tun == null) {
+                    LogStore.add("Service", "ОШИБКА: VpnService не разрешил TUN (WG через Xray)");
+                    lastError = "VpnService не разрешил TUN";
+                    connected = false;
+                    broadcastState();
+                    stopSelf();
+                    return;
+                }
+                holder[0] = tun;
+                vpnInterface = tun;
+                if (startEpoch.get() != myEpoch) {
+                    LogStore.add("Service", "Старт WG-через-Xray отменён (состояние изменилось)");
+                    closeQuietly(tun);
+                    if (vpnInterface == tun) {
+                        vpnInterface = null;
+                    }
+                    return;
+                }
+                String logDir = getFilesDir().getAbsolutePath();
+                xrayRunner.startTunWg(config, tun.getFd(), logDir, resolvedEndpoint);
+                connected = true;
+                broadcastState();
+                // UDP-сокет WG живёт внутри Xray: при смене сети пересоздаём туннель
+                // целиком (тот же NetworkCallback, что у режима WireGuard).
+                registerWgNetworkCallback();
+            } catch (Exception e) {
+                Log.e(TAG, "Xray WG start failed", e);
+                LogStore.add("Service", "ОШИБКА запуска Xray (WG через Xray): " + e);
+                lastError = e.getMessage();
+                connected = false;
+                broadcastState();
+                ParcelFileDescriptor tun = holder[0];
+                if (tun != null) {
+                    closeQuietly(tun);
+                    if (vpnInterface == tun) {
+                        vpnInterface = null;
+                    }
+                }
+                stopSelf();
             }
-            vpnInterface = null;
-            stopSelf();
+        }, "wg-xray-start").start();
+    }
+
+    /** Закрывает ParcelFileDescriptor, глотая исключения (вспомогательная). */
+    private static void closeQuietly(ParcelFileDescriptor p) {
+        try {
+            p.close();
+        } catch (Exception ignored) {
         }
     }
 
@@ -736,6 +777,7 @@ public class GrizzlyLandVpnService extends VpnService {
     private void disconnect() {
         connected = false;
         lastError = "";
+        startEpoch.incrementAndGet(); // отменить асинхронный старт WG-через-Xray, если он в полёте
         broadcastState();
         LogStore.add("Service", "==== Отключение ====");
         stopTunFdMonitor();

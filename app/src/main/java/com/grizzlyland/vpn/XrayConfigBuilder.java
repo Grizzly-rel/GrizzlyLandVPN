@@ -61,7 +61,7 @@ public class XrayConfigBuilder {
      * не попавшие в правила). DNS (порт 53 из TUN) идёт в dns-out (модуль Xray),
      * а его собственные запросы уходят в дефолт — то есть тоже сквозь WG-туннель.
      */
-    public static String buildTunWg(ConfigManager c, String logDir) {
+    public static String buildTunWg(ConfigManager c, String logDir, String resolvedEndpoint) {
         try {
             WgConfigParser.WgConfig wg = WgConfigParser.parse(c.getWgRaw());
             if (!wg.valid) {
@@ -78,7 +78,7 @@ public class XrayConfigBuilder {
 
             JSONArray outbounds = new JSONArray();
             // Дефолт (первый) — WG: весь трафик TUN уходит в WG-туннель.
-            outbounds.put(wgOutbound(wg));
+            outbounds.put(wgOutbound(wg, c, resolvedEndpoint));
             // Прокси (VLESS и т.п.) — тот же outbound, что и в остальных режимах;
             // на него ссылается dialerProxy WG-outbound'а.
             JSONObject proxy = new JSONObject();
@@ -106,11 +106,14 @@ public class XrayConfigBuilder {
      * ПЕРВЫЙ peer: listenFunc WG-клиента Xray привязывает UDP-сокет к endpoint'у
      * peers[0], пакеты к остальным peer ушли бы туда же.
      */
-    private static JSONObject wgOutbound(WgConfigParser.WgConfig wg) throws JSONException {
+    private static JSONObject wgOutbound(WgConfigParser.WgConfig wg, ConfigManager c,
+                                         String resolvedEndpoint) throws JSONException {
         WgConfigParser.PeerInfo peer = wg.peerList.get(0);
         if (peer.endpoint.isEmpty()) {
             throw new IllegalStateException("В конфиге WireGuard не задан Endpoint peer");
         }
+        String endpoint = (resolvedEndpoint != null && !resolvedEndpoint.isEmpty())
+                ? resolvedEndpoint : resolveWgEndpoint(peer.endpoint);
 
         JSONObject out = new JSONObject();
         out.put("tag", "wg-out");
@@ -138,7 +141,7 @@ public class XrayConfigBuilder {
         if (!peer.pskHex.isEmpty()) {
             p.put("preSharedKey", peer.pskHex);
         }
-        p.put("endpoint", peer.endpoint);
+        p.put("endpoint", endpoint);
         if (!peer.keepalive.isEmpty()) {
             try {
                 p.put("keepAlive", Integer.parseInt(peer.keepalive.trim()));
@@ -158,12 +161,21 @@ public class XrayConfigBuilder {
 
         // DNS-серверы внутреннего WG-стека (резолв доменных целей внутри туннеля).
         // Строго IPv4: Xray парсит их через netip.MustParseAddr и паникует на мусоре,
-        // а IPv6 в v4-only туннеле бесполезен.
+        // а IPv6 в v4-only туннеле бесполезен. Если в wg-конфиге DNS нет — берём
+        // plain-IP из настроек Xray (иначе Xray подставит свои дефолты с IPv6).
         JSONArray rdns = new JSONArray();
         for (String d : wg.dns) {
             String dd = d.trim();
             if (isPlainIpv4(dd)) {
                 rdns.put(dd);
+            }
+        }
+        if (rdns.length() == 0) {
+            for (String d : c.getXrayDnsPlain().split(",")) {
+                String dd = d.trim();
+                if (isPlainIpv4(dd)) {
+                    rdns.put(dd);
+                }
             }
         }
         if (rdns.length() > 0) {
@@ -179,6 +191,65 @@ public class XrayConfigBuilder {
         ss.put("sockopt", sockopt);
         out.put("streamSettings", ss);
         return out;
+    }
+
+    /**
+     * Резолвит домен в endpoint'е WG ЗАРАНЕЕ, на стороне приложения.
+     *
+     * Зачем: WG-outbound резолвит endpoint через DNS-модуль Xray (bind.ParseEndpoint
+     * → resolveFunc → app/dns), а запросы DNS-модуля в этом режиме уходят в
+     * дефолтный outbound — то есть снова в wg-out, который не может подняться,
+     * пока его endpoint не зарезолвлен. Получается цикл «резолв через
+     * несозданный туннель» (на практике: IpcSet падает по таймаутам DNS, режим
+     * не стартует). Java-резолв идёт штатной сетью мимо TUN (свой трафик
+     * приложения исключён из VPN), поэтому цикл разрывается. IP-адрес в
+     * endpoint'е проходит насквозь без изменений; при реконнекте конфиг
+     * строится заново — адрес перепосвежается.
+     *
+     * ВАЖНО: вызывать ДО establish() TUN — резолв при уже поднятом туннеле
+     * уходит в VPN-заглушку DNS и ломается (проверено на устройстве).
+     */
+    public static String resolveWgEndpoint(String endpoint) {
+        int colon = endpoint.lastIndexOf(':');
+        if (colon <= 0 || colon == endpoint.length() - 1) {
+            throw new IllegalStateException("Некорректный Endpoint peer: \"" + endpoint + "\" (нужен host:port)");
+        }
+        String host = endpoint.substring(0, colon);
+        String port = endpoint.substring(colon + 1);
+        if (isPlainIpv4(host) || host.startsWith("[")) {
+            return endpoint; // уже IP (или скобочный IPv6) — резолв не нужен
+        }
+        // Две попытки: разовый сбой резолва (особенно сразу после пробуждения
+        // сети) не должен ронять подключение.
+        String lastErr = "";
+        for (int attempt = 0; attempt < 2; attempt++) {
+            try {
+                java.net.InetAddress[] addrs = java.net.InetAddress.getAllByName(host);
+                String picked = null;
+                for (java.net.InetAddress a : addrs) {
+                    if (a instanceof java.net.Inet4Address) {
+                        picked = a.getHostAddress();
+                        break;
+                    }
+                }
+                if (picked == null && addrs.length > 0) {
+                    picked = addrs[0].getHostAddress();
+                }
+                if (picked != null) {
+                    return picked + ":" + port;
+                }
+                lastErr = "сервер не вернул адресов";
+            } catch (Exception e) {
+                lastErr = e.getClass().getSimpleName()
+                        + (e.getMessage() == null ? "" : (": " + e.getMessage()));
+            }
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException ignored) {
+            }
+        }
+        throw new IllegalStateException("Не удалось резолвить WG endpoint \""
+                + host + "\": " + lastErr);
     }
 
     /** Строгая проверка IPv4 (для remoteDNS wireguard-outbound). */

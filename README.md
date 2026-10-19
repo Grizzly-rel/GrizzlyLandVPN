@@ -30,7 +30,10 @@ Min SDK 24 (Android 7.0+), arm64-v8a.
    WG outbound, DNS (port 53) goes to the Xray DNS module whose queries then
    travel through the WG tunnel as well. Uses the first `[Peer]` of the same
    wg-quick config as mode 5; the WG server endpoint must be reachable from
-   the VLESS server.
+   the VLESS server. The endpoint host is resolved by the app (Java DNS)
+   before the tunnel starts — the core's own DNS would route through the
+   not-yet-created WG tunnel (chicken-and-egg); `Endpoint = host port`
+   (space-separated) is normalized to `host:port` on import.
 
 Additional features:
 

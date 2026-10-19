@@ -168,7 +168,13 @@ public class WgConfigParser {
                             c.parseError = "PresharedKey: " + e.getMessage();
                         }
                         break;
-                    case "endpoint": ps.endpoint = val; break;
+                    case "endpoint":
+                        // Некоторые генераторы пишут «host port» через пробел, а не
+                        // «host:port» (формат wg/UAPI). Нормализуем: первый пробел
+                        // (и всю группу) заменяем на двоеточие; скобочную IPv6-форму
+                        // это не ломает ([v6] port → [v6]:port).
+                        ps.endpoint = val.trim().replaceAll("\\s+", ":");
+                        break;
                     case "allowedips": addCsv(ps.allowed, val); break;
                     case "persistentkeepalive": ps.keepalive = val; break;
                     default: break;
