@@ -27,6 +27,8 @@ public class ConfigManager {
     public static final String MODE_XRAY_CUSTOM = "xray_custom";
     /** OpenVPN через SSH-сессию: локальный TCP-форвард порта OpenVPN-сервера (TCP-only). */
     public static final String MODE_OVPN_SSH = "openvpn_ssh";
+    /** WireGuard: userspace-движок wireguard-go поверх VpnService TUN. */
+    public static final String MODE_WG = "wireguard";
 
     private static final String PREFS = "grizzlyland_config";
 
@@ -108,6 +110,10 @@ public class ConfigManager {
     /** Аутентификация SSH по приватному ключу. */
     public static final String SSH_AUTH_KEY = "key";
 
+    // --- WireGuard (режим wireguard) ---
+    /** Сырой wg-quick конфиг (источник истины для режима WireGuard). */
+    private static final String KEY_WG_RAW = "wg_raw";
+
     private static final String KEY_ALLOWED = "allowed_apps";
 
     private final SharedPreferences prefs;
@@ -166,6 +172,11 @@ public class ConfigManager {
         return !prefs.getString(KEY_SSH_HOST, "").trim().isEmpty()
                 && !prefs.getString(KEY_SSH_USER, "").trim().isEmpty();
     }
+
+    // ===== WireGuard (режим wireguard) =====
+    /** Сырой wg-quick конфиг: [Interface]/[Peer] как в стандартном .conf. */
+    public String getWgRaw() { return prefs.getString(KEY_WG_RAW, ""); }
+    public void setWgRaw(String v) { prefs.edit().putString(KEY_WG_RAW, v == null ? "" : v).apply(); }
 
     // ===== Xray =====
     public String getXrayProtocol() { return prefs.getString(KEY_X_PROTOCOL, "vless"); }
@@ -397,6 +408,7 @@ public class ConfigManager {
             o.put("xray", xrayToJson());
             o.put("openvpn", openvpnToJson());
             o.put("ssh", sshToJson());
+            o.put("wg", wgToJson());
             o.put("logDebug", getLogDebug());
 
             JSONArray apps = new JSONArray();
@@ -516,6 +528,11 @@ public class ConfigManager {
             applySsh(ssh);
         }
 
+        JSONObject wg = o.optJSONObject("wg");
+        if (wg != null) {
+            applyWg(wg);
+        }
+
         if (o.has("logDebug")) {
             setLogDebug(o.getBoolean("logDebug"));
         }
@@ -625,5 +642,15 @@ public class ConfigManager {
         if (s.has("target")) setSshTarget(s.getString("target"));
         if (s.has("localPort")) setSshLocalPort(s.getInt("localPort"));
         if (s.has("hostKeyFp")) setSshHostKeyFp(s.getString("hostKeyFp"));
+    }
+
+    private JSONObject wgToJson() throws JSONException {
+        JSONObject w = new JSONObject();
+        w.put("raw", getWgRaw());
+        return w;
+    }
+
+    private void applyWg(JSONObject w) throws JSONException {
+        if (w.has("raw")) setWgRaw(w.getString("raw"));
     }
 }

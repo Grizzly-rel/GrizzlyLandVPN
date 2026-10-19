@@ -45,6 +45,12 @@ public class GrizzlyLandVpnService extends VpnService {
     private OpenVpnRunner openVpnRunner = new OpenVpnRunner();
     /** SSH-туннель для режима openvpn_ssh (живёт, пока работает VPN в этом режиме). */
     private SshTunnel sshTunnel;
+    /** WireGuard-движок для режима wireguard (живёт, пока работает VPN в этом режиме). */
+    private WgRunner wgRunner;
+    /** Сетевой колбэк режима WireGuard: при смене сети пересоздаём туннель
+     *  (UDP-сокеты движка перепривязываются). */
+    private android.net.ConnectivityManager.NetworkCallback wgNetCallback;
+    private android.net.Network wgLastNetwork;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -61,6 +67,7 @@ public class GrizzlyLandVpnService extends VpnService {
                 xrayRunner.stop();
                 openVpnRunner.stop();
                 stopSshTunnel();
+                stopWgEngine();
                 if (vpnInterface != null) {
                     try {
                         vpnInterface.close();
@@ -102,6 +109,9 @@ public class GrizzlyLandVpnService extends VpnService {
                 // нативному openvpn через management (команда OPENTUN), поэтому
                 // здесь tun НЕ устанавливаем заранее. Устанавливаем провайдер.
                 startOpenVpnMode(mode);
+            } else if (ConfigManager.MODE_WG.equals(mode)) {
+                // Режим WireGuard: TUN создаём сами и отдаём fd движку wireguard-go.
+                startWgMode();
             } else {
                 // Режимы "только Xray": устанавливаем TUN и отдаём fd Xray.
                 // Если задан пользовательский custom-конфиг — используем его (inbounds
@@ -235,6 +245,214 @@ public class GrizzlyLandVpnService extends VpnService {
         if (t != null) {
             t.stop();
         }
+    }
+
+    // ===== WireGuard (режим wireguard) =====
+
+    /**
+     * Режим WireGuard: парсим wg-quick конфиг, создаём TUN VpnService
+     * (адреса/DNS/маршруты из конфига) и отдаём fd движку wireguard-go
+     * (libwg.aar). UDP-сокеты движка защищаются через protect сразу после
+     * подъёма. При смене сети туннель пересоздаётся (NetworkCallback).
+     */
+    private void startWgMode() {
+        WgConfigParser.WgConfig cfg = WgConfigParser.parse(config.getWgRaw());
+        if (!cfg.valid) {
+            lastError = "WG: конфиг некорректен"
+                    + (cfg.parseError.isEmpty() ? "" : (": " + cfg.parseError))
+                    + " (Настройки → Настройки WireGuard)";
+            LogStore.add("Service", "ОШИБКА: " + lastError);
+            broadcastState();
+            stopSelf();
+            return;
+        }
+        LogStore.add("Service", "WG-конфиг: адресов=" + cfg.addresses.size()
+                + " peer=" + cfg.peers + " endpoint=" + cfg.endpointForLog
+                + " mtu=" + (cfg.mtu > 0 ? cfg.mtu : 1420));
+        vpnInterface = buildBuilderForWg(cfg).establish();
+        if (vpnInterface == null) {
+            LogStore.add("Service", "ОШИБКА: VpnService не разрешил TUN (WG)");
+            lastError = "VpnService не разрешил TUN";
+            broadcastState();
+            stopSelf();
+            return;
+        }
+        // Владение fd переходит движку: detach, чтобы close() обёртки в
+        // disconnect() не закрыл fd, которым владеет wireguard-go.
+        final int tunFd = vpnInterface.detachFd();
+        stopWgEngine();
+        wgRunner = new WgRunner(this::protectFd, new WgRunner.Listener() {
+            @Override
+            public void onUp() {
+                connected = true;
+                broadcastState();
+                LogStore.add("Service", "WireGuard: туннель поднят");
+                registerWgNetworkCallback();
+            }
+
+            @Override
+            public void onError(String message) {
+                LogStore.add("Service", "ОШИБКА WG: " + message);
+                lastError = message;
+                connected = false;
+                broadcastState();
+                stopWgEngine();
+                stopSelf();
+            }
+        });
+        wgRunner.start(tunFd, cfg.ipc);
+    }
+
+    /** Останавливает WG-движок, сетевой колбэк и (если жив) TUN-обёртку. */
+    private void stopWgEngine() {
+        unregisterWgNetworkCallback();
+        WgRunner r = wgRunner;
+        wgRunner = null;
+        if (r != null) {
+            r.stop();
+        }
+        if (vpnInterface != null) {
+            try {
+                vpnInterface.close();
+            } catch (Exception ignored) {
+            }
+            vpnInterface = null;
+        }
+    }
+
+    /**
+     * Билдер TUN для WireGuard: адреса и DNS из конфига, маршруты из
+     * AllowedIPs (0.0.0.0/0 → весь трафик), per-app фильтрация как везде.
+     * Отдельный метод (не общий buildBuilder), чтобы не трогать рабочий код
+     * остальных режимов.
+     */
+    private Builder buildBuilderForWg(WgConfigParser.WgConfig cfg) {
+        Builder builder = new Builder()
+                .setSession(getString(R.string.app_name))
+                .setBlocking(true)
+                .setMtu(cfg.mtu > 0 ? cfg.mtu : 1420);
+        for (String cidr : cfg.addresses) {
+            String[] p = cidr.split("/");
+            if (p.length < 1 || !isIpv4(p[0])) {
+                continue;
+            }
+            int prefix = 32;
+            if (p.length > 1) {
+                try {
+                    prefix = Integer.parseInt(p[1].trim());
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            if (prefix < 0 || prefix > 32) {
+                prefix = 32;
+            }
+            try {
+                builder.addAddress(p[0], prefix);
+            } catch (Exception e) {
+                Log.e(TAG, "WG addAddress failed for " + cidr, e);
+            }
+        }
+        for (String d : cfg.dns) {
+            if (isIpv4(d)) {
+                try {
+                    builder.addDnsServer(d);
+                } catch (Exception e) {
+                    Log.e(TAG, "WG addDnsServer failed for " + d, e);
+                }
+            }
+        }
+        boolean defaultRoute = false;
+        int routesAdded = 0;
+        for (String cidr : cfg.allowedIps) {
+            String[] p = cidr.split("/");
+            if (p.length < 1 || !isIpv4(p[0])) {
+                continue;
+            }
+            int prefix = 32;
+            if (p.length > 1) {
+                try {
+                    prefix = Integer.parseInt(p[1].trim());
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            if (p[0].equals("0.0.0.0") && prefix == 0) {
+                defaultRoute = true;
+                continue;
+            }
+            try {
+                builder.addRoute(p[0], prefix);
+                routesAdded++;
+                LogStore.add("Service", "WG-маршрут: " + p[0] + "/" + prefix);
+            } catch (Exception e) {
+                Log.e(TAG, "WG addRoute failed for " + cidr, e);
+            }
+        }
+        if (defaultRoute || routesAdded == 0) {
+            builder.addRoute("0.0.0.0", 0);
+        }
+        for (String pkg : config.getAllowedApps()) {
+            try {
+                builder.addAllowedApplication(pkg);
+            } catch (Exception e) {
+                Log.e(TAG, "addAllowedApplication failed for " + pkg, e);
+            }
+        }
+        if (config.getAllowedApps().isEmpty()) {
+            try {
+                builder.addDisallowedApplication(getPackageName());
+            } catch (Exception e) {
+                Log.e(TAG, "addDisallowedApplication failed for own package", e);
+            }
+        }
+        return builder;
+    }
+
+    /**
+     * Смена сети на телефоне: UDP-сокеты движка привязаны к умершему интерфейсу.
+     * Простейший корректный ответ (как в официальном приложении) — пересоздать
+     * туннель целиком через штатный RECONNECT.
+     */
+    private void registerWgNetworkCallback() {
+        if (wgNetCallback != null) {
+            return;
+        }
+        try {
+            android.net.ConnectivityManager cm =
+                    (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            wgNetCallback = new android.net.ConnectivityManager.NetworkCallback() {
+                @Override
+                public void onAvailable(android.net.Network network) {
+                    // Только дефолтная сеть (registerDefaultNetworkCallback):
+                    // перезапуск нужен один раз при реальной смене сети, иначе
+                    // колбэк по каждой сети (Wi-Fi + LTE) даёт цикл рестартов.
+                    if (wgLastNetwork != null && !network.equals(wgLastNetwork)
+                            && connected && ConfigManager.MODE_WG.equals(config.getMode())) {
+                        LogStore.add("Wg", "сменилась сеть — перезапуск WG-туннеля");
+                        Intent i = new Intent(GrizzlyLandVpnService.this,
+                                GrizzlyLandVpnService.class);
+                        i.setAction(ACTION_RECONNECT);
+                        startService(i);
+                    }
+                    wgLastNetwork = network;
+                }
+            };
+            cm.registerDefaultNetworkCallback(wgNetCallback);
+        } catch (Exception e) {
+            LogStore.add("Wg", "NetworkCallback не зарегистрирован: " + e);
+        }
+    }
+
+    private void unregisterWgNetworkCallback() {
+        if (wgNetCallback != null) {
+            try {
+                android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
+                        getSystemService(CONNECTIVITY_SERVICE);
+                cm.unregisterNetworkCallback(wgNetCallback);
+            } catch (Exception ignored) {
+            }
+            wgNetCallback = null;
+        }
+        wgLastNetwork = null;
     }
 
     /**
@@ -461,6 +679,7 @@ public class GrizzlyLandVpnService extends VpnService {
         xrayRunner.stop();
         openVpnRunner.stop();
         stopSshTunnel();
+        stopWgEngine();
         if (vpnInterface != null) {
             try {
                 vpnInterface.close();

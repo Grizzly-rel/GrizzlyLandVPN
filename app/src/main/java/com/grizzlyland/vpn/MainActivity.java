@@ -204,6 +204,10 @@ public class MainActivity extends Activity {
         if (ConfigManager.MODE_OPENVPN.equals(mode)) {
             return ovpnOk;
         }
+        if (ConfigManager.MODE_WG.equals(mode)) {
+            // Для WireGuard достаточно непустого корректного конфига.
+            return WgConfigParser.parse(config.getWgRaw()).valid;
+        }
         // xray_openvpn
         return xrayOk && ovpnOk;
     }
@@ -221,6 +225,15 @@ public class MainActivity extends Activity {
             sb.append("\nSSH: ").append(config.getSshHost()).append(":")
                     .append(config.getSshPort()).append(" (").append(config.getSshUser()).append(")");
             sb.append("\nOpenVPN (через SSH): ").append(config.getSshTarget());
+        } else if (ConfigManager.MODE_WG.equals(mode)) {
+            // В режиме WireGuard показываем сводку по wg-конфигу.
+            WgConfigParser.WgConfig c = WgConfigParser.parse(config.getWgRaw());
+            sb.append("\nWireGuard: ").append(c.valid ? "конфиг задан" : "конфиг не задан");
+            if (c.valid) {
+                sb.append("\nEndpoint: ").append(c.endpointForLog.isEmpty() ? "(не задан)" : c.endpointForLog);
+                sb.append("\nPeer: ").append(c.peers)
+                        .append(", адресов: ").append(c.addresses.size());
+            }
         } else {
             sb.append("\nXray: ").append(config.getXrayAddress()).append(":")
                     .append(config.getXrayPort());
@@ -259,6 +272,9 @@ public class MainActivity extends Activity {
         }
         if (ConfigManager.MODE_OVPN_SSH.equals(mode)) {
             return "OpenVPN через SSH";
+        }
+        if (ConfigManager.MODE_WG.equals(mode)) {
+            return "WireGuard";
         }
         return "Xray + OpenVPN";
     }

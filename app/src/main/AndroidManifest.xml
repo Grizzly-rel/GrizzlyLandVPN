@@ -33,6 +33,7 @@
         <activity android:name=".XraySettingsActivity" android:exported="false" />
         <activity android:name=".OpenVpnSettingsActivity" android:exported="false" />
         <activity android:name=".SshSettingsActivity" android:exported="false" />
+        <activity android:name=".WgSettingsActivity" android:exported="false" />
         <activity android:name=".LogsActivity" android:exported="false" />
 
         <service

@@ -15,6 +15,11 @@ Min SDK 24 (Android 7.0+), arm64-v8a.
    reachable through VLESS/Reality.
 4. **OpenVPN over SSH** — an SSH session (JSch, bundled jar) with a local TCP
    forward to the OpenVPN server; the OpenVPN server must listen on `proto tcp`.
+5. **WireGuard** — userspace engine (wireguard-go, embedded in the same native
+   library as Xray) over the VpnService TUN. The config is a standard wg-quick
+   `.conf` (paste it as-is); key pair generation is built in. UDP sockets are
+   protected via `VpnService.protect`; on network change the tunnel is
+   re-created automatically.
 
 Additional features:
 

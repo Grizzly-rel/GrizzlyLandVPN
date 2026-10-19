@@ -55,6 +55,7 @@ public class SettingsActivity extends Activity {
         addMode(modeGroup, "Только OpenVPN (с шифрованием)", ConfigManager.MODE_OPENVPN);
         addMode(modeGroup, "Xray + OpenVPN (без шифрования)", ConfigManager.MODE_XRAY_OVPN);
         addMode(modeGroup, "OpenVPN через SSH", ConfigManager.MODE_OVPN_SSH);
+        addMode(modeGroup, "WireGuard", ConfigManager.MODE_WG);
         selectMode(config.getMode());
         // Самосохранение: клик по радиокнопке сразу применяет режим (реконнект,
         // если VPN подключён). Отдельная кнопка «Сохранить режим» излишня.
@@ -109,6 +110,16 @@ public class SettingsActivity extends Activity {
             }
         });
         root.addView(ssh, lp());
+
+        Button wg = new Button(this);
+        wg.setText("Настройки WireGuard");
+        wg.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(SettingsActivity.this, WgSettingsActivity.class));
+            }
+        });
+        root.addView(wg, lp());
 
         Button exportAll = new Button(this);
         exportAll.setText("Экспорт всех настроек");
