@@ -208,6 +208,10 @@ public class MainActivity extends Activity {
             // Для WireGuard достаточно непустого корректного конфига.
             return WgConfigParser.parse(config.getWgRaw()).valid;
         }
+        if (ConfigManager.MODE_WG_XRAY.equals(mode)) {
+            // WG-конфиг + рабочие настройки Xray (обёртка VLESS).
+            return WgConfigParser.parse(config.getWgRaw()).valid && xrayOk;
+        }
         // xray_openvpn
         return xrayOk && ovpnOk;
     }
@@ -234,6 +238,15 @@ public class MainActivity extends Activity {
                 sb.append("\nPeer: ").append(c.peers)
                         .append(", адресов: ").append(c.addresses.size());
             }
+        } else if (ConfigManager.MODE_WG_XRAY.equals(mode)) {
+            // WireGuard через Xray: WG-конфиг + Xray-обёртка.
+            WgConfigParser.WgConfig c = WgConfigParser.parse(config.getWgRaw());
+            sb.append("\nWireGuard: ").append(c.valid ? "конфиг задан" : "конфиг не задан");
+            if (c.valid) {
+                sb.append("\nWG Endpoint: ").append(c.endpointForLog.isEmpty() ? "(не задан)" : c.endpointForLog);
+            }
+            sb.append("\nXray (обёртка): ").append(config.getXrayAddress()).append(":")
+                    .append(config.getXrayPort());
         } else {
             sb.append("\nXray: ").append(config.getXrayAddress()).append(":")
                     .append(config.getXrayPort());
@@ -275,6 +288,9 @@ public class MainActivity extends Activity {
         }
         if (ConfigManager.MODE_WG.equals(mode)) {
             return "WireGuard";
+        }
+        if (ConfigManager.MODE_WG_XRAY.equals(mode)) {
+            return "WireGuard через Xray";
         }
         return "Xray + OpenVPN";
     }

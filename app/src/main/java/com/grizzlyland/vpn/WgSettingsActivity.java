@@ -1,6 +1,8 @@
 package com.grizzlyland.vpn;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -11,6 +13,10 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+
 import libxray.Libxray;
 
 /**
@@ -20,6 +26,9 @@ import libxray.Libxray;
  * Кнопка «Сгенерировать ключи» создаёт пару ключей и подставляет PrivateKey.
  */
 public class WgSettingsActivity extends Activity {
+
+    private static final int REQ_EXPORT = 2301;
+    private static final int REQ_IMPORT = 2302;
 
     private ConfigManager config;
     private EditText raw;
@@ -48,6 +57,34 @@ public class WgSettingsActivity extends Activity {
         hint.setTextSize(12);
         hint.setPadding(0, 8, 0, 16);
         root.addView(hint);
+
+        // Кнопки импорта/экспорта .conf — как в настройках OpenVPN (.ovpn).
+        LinearLayout io = new LinearLayout(this);
+        io.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button importBtn = new Button(this);
+        importBtn.setText("Импорт .conf");
+        importBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                importConfig();
+            }
+        });
+        io.addView(importBtn, new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        Button exportBtn = new Button(this);
+        exportBtn.setText("Экспорт .conf");
+        exportBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                exportConfig();
+            }
+        });
+        io.addView(exportBtn, new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        root.addView(io, lp());
 
         TextView rawLabel = new TextView(this);
         rawLabel.setText("Конфиг wg-quick");
@@ -89,6 +126,69 @@ public class WgSettingsActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.addView(root);
         setContentView(scroll);
+    }
+
+    /** SAF-пикер: сохранить текущий конфиг как .conf файл. */
+    private void exportConfig() {
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        // octet-stream, чтобы documentsui не дописывал ".txt" к имени grizzlylandvpn.conf
+        intent.setType("application/octet-stream");
+        intent.putExtra(Intent.EXTRA_TITLE, "grizzlylandvpn.conf");
+        startActivityForResult(intent, REQ_EXPORT);
+    }
+
+    /** SAF-пикер: выбрать .conf файл wg-quick и загрузить его. */
+    private void importConfig() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        startActivityForResult(intent, REQ_IMPORT);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+            return;
+        }
+        Uri uri = data.getData();
+        if (requestCode == REQ_EXPORT) {
+            try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+                // Экспортируем то, что видно в поле (если пусто — сохранённый конфиг).
+                String text = raw.getText().toString();
+                String out = (!text.trim().isEmpty() ? text : config.getWgRaw()).trim() + "\n";
+                os.write(out.getBytes("UTF-8"));
+                Toast.makeText(this, "Конфиг .conf экспортирован", Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                Toast.makeText(this, "Ошибка экспорта: " + e.getMessage(),
+                        Toast.LENGTH_LONG).show();
+            }
+        } else if (requestCode == REQ_IMPORT) {
+            try (InputStream is = getContentResolver().openInputStream(uri)) {
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = is.read(buf)) != -1) {
+                    bos.write(buf, 0, n);
+                }
+                String text = new String(bos.toByteArray(), "UTF-8");
+                config.setWgRaw(text);
+                raw.setText(text);
+                WgConfigParser.WgConfig cfg = WgConfigParser.parse(text);
+                GrizzlyLandVpnService.requestApply(this);
+                if (cfg.valid) {
+                    Toast.makeText(this, "Конфиг .conf импортирован", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "Импортировано, но конфиг неполный "
+                            + "(нужны [Interface] PrivateKey и [Peer] PublicKey)",
+                            Toast.LENGTH_LONG).show();
+                }
+            } catch (Exception e) {
+                Toast.makeText(this, "Ошибка импорта: " + e.getMessage(),
+                        Toast.LENGTH_LONG).show();
+            }
+        }
     }
 
     /**

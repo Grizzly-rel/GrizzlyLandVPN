@@ -1,7 +1,7 @@
 # GrizzlyLandVPN
 
 An Android VPN client that combines **Xray (VLESS/Reality)** and **OpenVPN** in one app,
-with four connection modes, per-app split tunneling and a compact dependency set.
+with six connection modes, per-app split tunneling and a compact dependency set.
 Min SDK 24 (Android 7.0+), arm64-v8a.
 
 ## Modes
@@ -17,9 +17,20 @@ Min SDK 24 (Android 7.0+), arm64-v8a.
    forward to the OpenVPN server; the OpenVPN server must listen on `proto tcp`.
 5. **WireGuard** — userspace engine (wireguard-go, embedded in the same native
    library as Xray) over the VpnService TUN. The config is a standard wg-quick
-   `.conf` (paste it as-is); key pair generation is built in. UDP sockets are
+   `.conf` (paste it as-is, or import/export it with the buttons in the WG
+   settings); key pair generation is built in. UDP sockets are
    protected via `VpnService.protect`; on network change the tunnel is
    re-created automatically.
+6. **WireGuard over Xray** — the WG encryption is done by Xray's own
+   `wireguard` outbound (userspace client with a gVisor netstack inside the
+   core), and its UDP traffic to the WG server is carried through the
+   VLESS/Reality tunnel via `sockopt.dialerProxy` — the WireGuard protocol is
+   hidden from DPI the same way OpenVPN is in mode 3 (SSH cannot carry WG:
+   SSH forwards TCP only, WG is UDP). The default route of the TUN goes to the
+   WG outbound, DNS (port 53) goes to the Xray DNS module whose queries then
+   travel through the WG tunnel as well. Uses the first `[Peer]` of the same
+   wg-quick config as mode 5; the WG server endpoint must be reachable from
+   the VLESS server.
 
 Additional features:
 

@@ -56,6 +56,7 @@ public class SettingsActivity extends Activity {
         addMode(modeGroup, "Xray + OpenVPN (без шифрования)", ConfigManager.MODE_XRAY_OVPN);
         addMode(modeGroup, "OpenVPN через SSH", ConfigManager.MODE_OVPN_SSH);
         addMode(modeGroup, "WireGuard", ConfigManager.MODE_WG);
+        addMode(modeGroup, "WireGuard через Xray", ConfigManager.MODE_WG_XRAY);
         selectMode(config.getMode());
         // Самосохранение: клик по радиокнопке сразу применяет режим (реконнект,
         // если VPN подключён). Отдельная кнопка «Сохранить режим» излишня.

@@ -112,6 +112,10 @@ public class GrizzlyLandVpnService extends VpnService {
             } else if (ConfigManager.MODE_WG.equals(mode)) {
                 // Режим WireGuard: TUN создаём сами и отдаём fd движку wireguard-go.
                 startWgMode();
+            } else if (ConfigManager.MODE_WG_XRAY.equals(mode)) {
+                // WireGuard через Xray: TUN как в режиме "только Xray", но дефолтный
+                // outbound Xray — wireguard, чей UDP завёрнут в VLESS (dialerProxy).
+                startWgXrayMode();
             } else {
                 // Режимы "только Xray": устанавливаем TUN и отдаём fd Xray.
                 // Если задан пользовательский custom-конфиг — используем его (inbounds
@@ -321,6 +325,63 @@ public class GrizzlyLandVpnService extends VpnService {
     }
 
     /**
+     * Режим "WireGuard через Xray": шифрование WG выполняет wireguard-outbound
+     * самого Xray (userspace WG-клиент + gVisor-стек внутри ядра), а его UDP к
+     * WG-серверу идёт через VLESS-туннель (sockopt.dialerProxy → outbound "proxy").
+     * TUN создаётся как в режиме "только Xray" (адрес 10.0.0.2, DNS из Xray-настроек);
+     * адреса/DNS из wg-конфига живут внутри WG-стека Xray, а не в VpnService.
+     */
+    private void startWgXrayMode() {
+        WgConfigParser.WgConfig cfg = WgConfigParser.parse(config.getWgRaw());
+        if (!cfg.valid) {
+            lastError = "WG: конфиг некорректен"
+                    + (cfg.parseError.isEmpty() ? "" : (": " + cfg.parseError))
+                    + " (Настройки → Настройки WireGuard)";
+            LogStore.add("Service", "ОШИБКА: " + lastError);
+            broadcastState();
+            stopSelf();
+            return;
+        }
+        if (cfg.peerList.size() > 1) {
+            LogStore.add("Service", "WG-конфиг содержит " + cfg.peerList.size()
+                    + " peer — в режиме через Xray используется только первый ("
+                    + cfg.endpointForLog + ")");
+        }
+        LogStore.add("Service", "WG-через-Xray: endpoint=" + cfg.endpointForLog
+                + " адресов=" + cfg.addresses.size() + " peer=" + cfg.peers
+                + " mtu=" + (cfg.mtu > 0 ? cfg.mtu : 1420));
+        vpnInterface = buildBuilder(null, 1400, null, null).establish();
+        if (vpnInterface == null) {
+            LogStore.add("Service", "ОШИБКА: VpnService не разрешил TUN (WG через Xray)");
+            lastError = "VpnService не разрешил TUN";
+            broadcastState();
+            stopSelf();
+            return;
+        }
+        try {
+            String logDir = getFilesDir().getAbsolutePath();
+            xrayRunner.startTunWg(config, vpnInterface.getFd(), logDir);
+            connected = true;
+            broadcastState();
+            // UDP-сокет WG живёт внутри Xray: при смене сети пересоздаём туннель
+            // целиком (тот же NetworkCallback, что у режима WireGuard).
+            registerWgNetworkCallback();
+        } catch (Exception e) {
+            Log.e(TAG, "Xray WG start failed", e);
+            LogStore.add("Service", "ОШИБКА запуска Xray (WG через Xray): " + e);
+            lastError = e.getMessage();
+            connected = false;
+            broadcastState();
+            try {
+                vpnInterface.close();
+            } catch (Exception ignored) {
+            }
+            vpnInterface = null;
+            stopSelf();
+        }
+    }
+
+    /**
      * Билдер TUN для WireGuard: адреса и DNS из конфига, маршруты из
      * AllowedIPs (0.0.0.0/0 → весь трафик), per-app фильтрация как везде.
      * Отдельный метод (не общий buildBuilder), чтобы не трогать рабочий код
@@ -426,7 +487,9 @@ public class GrizzlyLandVpnService extends VpnService {
                     // перезапуск нужен один раз при реальной смене сети, иначе
                     // колбэк по каждой сети (Wi-Fi + LTE) даёт цикл рестартов.
                     if (wgLastNetwork != null && !network.equals(wgLastNetwork)
-                            && connected && ConfigManager.MODE_WG.equals(config.getMode())) {
+                            && connected
+                            && (ConfigManager.MODE_WG.equals(config.getMode())
+                                || ConfigManager.MODE_WG_XRAY.equals(config.getMode()))) {
                         LogStore.add("Wg", "сменилась сеть — перезапуск WG-туннеля");
                         Intent i = new Intent(GrizzlyLandVpnService.this,
                                 GrizzlyLandVpnService.class);

@@ -48,6 +48,154 @@ public class XrayConfigBuilder {
         }
     }
 
+    /**
+     * TUN-конфиг режима "WireGuard через Xray".
+     *
+     * Трафик из TUN попадает в wireguard-outbound Xray (полноценный userspace
+     * WG-клиент со встроенным gVisor-стеком), а его UDP-пакеты к WG-серверу
+     * дialятся ЧЕРЕЗ proxy-outbound (VLESS/Reality) через sockopt.dialerProxy —
+     * так протокол WireGuard скрыт от DPI точно так же, как OpenVPN в режиме
+     * Xray+OpenVPN (там ovpn ходит через локальный SOCKS).
+     *
+     * Порядок outbounds важен: ПЕРВЫЙ outbound в Xray — дефолтный (все маршруты,
+     * не попавшие в правила). DNS (порт 53 из TUN) идёт в dns-out (модуль Xray),
+     * а его собственные запросы уходят в дефолт — то есть тоже сквозь WG-туннель.
+     */
+    public static String buildTunWg(ConfigManager c, String logDir) {
+        try {
+            WgConfigParser.WgConfig wg = WgConfigParser.parse(c.getWgRaw());
+            if (!wg.valid) {
+                throw new IllegalStateException("Конфиг WireGuard некорректен"
+                        + (wg.parseError.isEmpty() ? "" : (": " + wg.parseError))
+                        + " (Настройки → Настройки WireGuard)");
+            }
+
+            JSONObject o = baseConfig(c, logDir);
+            JSONArray inbounds = new JSONArray();
+            inbounds.put(tunInbound(c));
+            inbounds.put(socksInbound(c));
+            o.put("inbounds", inbounds);
+
+            JSONArray outbounds = new JSONArray();
+            // Дефолт (первый) — WG: весь трафик TUN уходит в WG-туннель.
+            outbounds.put(wgOutbound(wg));
+            // Прокси (VLESS и т.п.) — тот же outbound, что и в остальных режимах;
+            // на него ссылается dialerProxy WG-outbound'а.
+            JSONObject proxy = new JSONObject();
+            proxy.put("protocol", c.getXrayProtocol());
+            proxy.put("settings", outboundSettings(c));
+            proxy.put("streamSettings", streamSettings(c));
+            proxy.put("tag", "proxy");
+            outbounds.put(proxy);
+            // DNS-выход — как в режиме "только Xray" (правило порта 53 в routing).
+            JSONObject dnsOut = new JSONObject();
+            dnsOut.put("protocol", "dns");
+            dnsOut.put("tag", "dns-out");
+            outbounds.put(dnsOut);
+            o.put("outbounds", outbounds);
+            return o.toString(2);
+        } catch (JSONException e) {
+            return "{}";
+        }
+        // IllegalStateException (некорректный WG-конфиг) сознательно пробрасывается
+        // наружу: сервис покажет ошибку пользователю и остановится.
+    }
+
+    /**
+     * WireGuard-outbound из разобранного wg-quick конфига. Используется только
+     * ПЕРВЫЙ peer: listenFunc WG-клиента Xray привязывает UDP-сокет к endpoint'у
+     * peers[0], пакеты к остальным peer ушли бы туда же.
+     */
+    private static JSONObject wgOutbound(WgConfigParser.WgConfig wg) throws JSONException {
+        WgConfigParser.PeerInfo peer = wg.peerList.get(0);
+        if (peer.endpoint.isEmpty()) {
+            throw new IllegalStateException("В конфиге WireGuard не задан Endpoint peer");
+        }
+
+        JSONObject out = new JSONObject();
+        out.put("tag", "wg-out");
+        out.put("protocol", "wireguard");
+
+        JSONObject settings = new JSONObject();
+        // Ключи уже в hex (WgConfigParser конвертирует base64 wg-quick для UAPI;
+        // Xray принимает и hex, и base64 — ParseWireGuardKey).
+        settings.put("secretKey", wg.privateKeyHex);
+        JSONArray addr = new JSONArray();
+        for (String a : wg.addresses) {
+            addr.put(a);
+        }
+        if (addr.length() == 0) {
+            addr.put("10.0.0.2/32");
+        }
+        settings.put("address", addr);
+        // На Android ядерный TUN недоступен — строго gVisor-стек внутри ядра Xray.
+        settings.put("noKernelTun", true);
+        settings.put("mtu", wg.mtu > 0 ? wg.mtu : 1420);
+
+        JSONArray peers = new JSONArray();
+        JSONObject p = new JSONObject();
+        p.put("publicKey", peer.publicKeyHex);
+        if (!peer.pskHex.isEmpty()) {
+            p.put("preSharedKey", peer.pskHex);
+        }
+        p.put("endpoint", peer.endpoint);
+        if (!peer.keepalive.isEmpty()) {
+            try {
+                p.put("keepAlive", Integer.parseInt(peer.keepalive.trim()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        if (!peer.allowed.isEmpty()) {
+            JSONArray ai = new JSONArray();
+            for (String cidr : peer.allowed) {
+                ai.put(cidr);
+            }
+            p.put("allowedIPs", ai);
+        }
+        // Иначе Xray сам ставит 0.0.0.0/0 + ::/0 (full tunnel).
+        peers.put(p);
+        settings.put("peers", peers);
+
+        // DNS-серверы внутреннего WG-стека (резолв доменных целей внутри туннеля).
+        // Строго IPv4: Xray парсит их через netip.MustParseAddr и паникует на мусоре,
+        // а IPv6 в v4-only туннеле бесполезен.
+        JSONArray rdns = new JSONArray();
+        for (String d : wg.dns) {
+            String dd = d.trim();
+            if (isPlainIpv4(dd)) {
+                rdns.put(dd);
+            }
+        }
+        if (rdns.length() > 0) {
+            settings.put("remoteDNS", rdns);
+        }
+        out.put("settings", settings);
+
+        // КЛЮЧЕВОЕ место режима: UDP-сокет WG к серверу dialится через outbound
+        // с тегом "proxy" (VLESS/Reality) — UDP-over-XUDP внутри прокси-соединения.
+        JSONObject ss = new JSONObject();
+        JSONObject sockopt = new JSONObject();
+        sockopt.put("dialerProxy", "proxy");
+        ss.put("sockopt", sockopt);
+        out.put("streamSettings", ss);
+        return out;
+    }
+
+    /** Строгая проверка IPv4 (для remoteDNS wireguard-outbound). */
+    private static boolean isPlainIpv4(String s) {
+        String[] o = s.split("\\.");
+        if (o.length != 4) return false;
+        for (String part : o) {
+            if (!part.matches("\\d{1,3}")) return false;
+            try {
+                if (Integer.parseInt(part) > 255) return false;
+            } catch (NumberFormatException e) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // ============================================================
     // Общая часть: log, dns, routing
     // ============================================================

@@ -48,6 +48,26 @@ public class XrayRunner {
     }
 
     /**
+     * Запуск Xray в TUN-режиме "WireGuard через Xray": tun-вход, дефолтный
+     * outbound — wireguard, чей UDP завёрнут в proxy через dialerProxy.
+     */
+    public synchronized void startTunWg(ConfigManager config, int tunFd, String logDir) throws Exception {
+        if (running) {
+            return;
+        }
+        Libxray.setTunFd(tunFd);
+        String json = XrayConfigBuilder.buildTunWg(config, logDir);
+        Log.i(TAG, "Starting Xray (TUN+WG mode), fd=" + tunFd + " config:\n" + json);
+        LogStore.add("Xray", "Запуск Xray (TUN+WG), fd=" + tunFd);
+        LogStore.add("Xray", "Конфиг:\n" + json);
+        Libxray.run(json);
+        running = true;
+        startLogTailer(logDir);
+        Log.i(TAG, "Xray TUN+WG started, version=" + Libxray.version());
+        LogStore.add("Xray", "Xray TUN+WG запущен, version=" + Libxray.version());
+    }
+
+    /**
      * Запуск Xray в режиме "custom": используется пользовательский JSON-конфиг
      * как есть, но inbounds подменяются на tun-вход (чтобы трафик из VPN-интерфейса
      * попадал в Xray). Конфиг валидируется (наличие outbounds), при ошибке бросается

@@ -29,6 +29,13 @@ public class ConfigManager {
     public static final String MODE_OVPN_SSH = "openvpn_ssh";
     /** WireGuard: userspace-движок wireguard-go поверх VpnService TUN. */
     public static final String MODE_WG = "wireguard";
+    /**
+     * WireGuard через Xray: WG-пакеты шифруются wireguard-outbound'ом Xray,
+     * а его UDP к серверу заворачивается в VLESS-туннель (sockopt.dialerProxy) —
+     * аналог режима Xray+OpenVPN для WireGuard. UDP через SSH-форвард невозможен
+     * (SSH форвардит только TCP), поэтому здесь роль SSH играет xray.
+     */
+    public static final String MODE_WG_XRAY = "wireguard_xray";
 
     private static final String PREFS = "grizzlyland_config";
 

@@ -22,6 +22,10 @@ public class WgConfigParser {
         public boolean valid = false;
         /** UAPI-строка для движка (wgengine.turnOn). */
         public String ipc = "";
+        /** Приватный ключ интерфейса в hex (для xray wireguard-outbound). */
+        public String privateKeyHex = "";
+        /** Разобранные peer в структурном виде (для xray wireguard-outbound). */
+        public final List<PeerInfo> peerList = new ArrayList<>();
         /** Адреса интерфейса (cidr, напр. "10.8.7.2/24"). */
         public List<String> addresses = new ArrayList<>();
         /** DNS из конфига (как есть; фильтрацию IP делает билдер). */
@@ -36,6 +40,15 @@ public class WgConfigParser {
         public int peers = 0;
         /** Ошибка разбора/конвертации (пусто — всё хорошо). */
         public String parseError = "";
+    }
+
+    /** Один peer в структурном виде (ключи уже в hex). */
+    public static class PeerInfo {
+        public String publicKeyHex = "";
+        public String pskHex = "";
+        public String endpoint = "";
+        public String keepalive = "";
+        public final List<String> allowed = new ArrayList<>();
     }
 
     /** Накопитель текущей peer-секции (мутабельный холдер вместо inner class). */
@@ -74,6 +87,13 @@ public class WgConfigParser {
         if (c.endpointForLog.isEmpty() && ps.endpoint != null) {
             c.endpointForLog = ps.endpoint;
         }
+        PeerInfo info = new PeerInfo();
+        info.publicKeyHex = ps.pub;
+        info.pskHex = ps.psk == null ? "" : ps.psk;
+        info.endpoint = ps.endpoint == null ? "" : ps.endpoint;
+        info.keepalive = ps.keepalive == null ? "" : ps.keepalive;
+        info.allowed.addAll(ps.allowed);
+        c.peerList.add(info);
         c.peers++;
         ps.reset();
     }
@@ -159,6 +179,7 @@ public class WgConfigParser {
 
         c.valid = c.parseError.isEmpty() && priv != null && !priv.isEmpty() && ipc.length() > 0;
         if (c.valid) {
+            c.privateKeyHex = priv;
             StringBuilder sb = new StringBuilder("private_key=").append(priv).append('\n');
             if (listenPort != null && !listenPort.isEmpty()) {
                 sb.append("listen_port=").append(listenPort).append('\n');
