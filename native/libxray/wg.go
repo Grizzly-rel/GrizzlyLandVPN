@@ -102,10 +102,6 @@ func WgTurnOn(ipcConfig string, fd int32, verbose bool) (int64, error) {
 		return 0, fmt.Errorf("пустой конфиг")
 	}
 	wgVerbose.Store(verbose)
-	ipcConfig, err := wgResolveEndpoints(ipcConfig)
-	if err != nil {
-		return 0, err
-	}
 	logger := &device.Logger{
 		Verbosef: func(format string, args ...interface{}) {
 			if wgVerbose.Load() {
@@ -119,6 +115,17 @@ func WgTurnOn(ipcConfig string, fd int32, verbose bool) (int64, error) {
 	tunDev, _, err := tun.CreateUnmonitoredTUNFromFD(int(fd))
 	if err != nil {
 		return 0, fmt.Errorf("tun из fd %d: %w", fd, err)
+	}
+	// Резолв endpoint'ов ПОСЛЕ создания tun-девайса: при ошибке резолва
+	// (сеть пропала / только возвращается — DNS ещё не поднялся; это
+	// транзиентная ошибка, Java ретраит старт) tunDev.Close() гарантированно
+	// закрывает и fd. Владение fd у WgTurnOn безусловно с момента вызова:
+	// при ЛЮБОЙ ошибке fd закрыт здесь, при успехе — закрыт в WgTurnOff.
+	// Java после вызова fd не закрывает никогда.
+	ipcConfig, err = wgResolveEndpoints(ipcConfig)
+	if err != nil {
+		tunDev.Close()
+		return 0, err
 	}
 	dev := device.NewDevice(tunDev, conn.NewDefaultBind(), logger)
 	if err = dev.IpcSet(strings.TrimRight(ipcConfig, "\n")); err != nil {

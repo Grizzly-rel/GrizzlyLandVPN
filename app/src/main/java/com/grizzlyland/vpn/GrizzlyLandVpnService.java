@@ -55,6 +55,39 @@ public class GrizzlyLandVpnService extends VpnService {
     private android.net.Network wgLastNetwork;
     /** Эпоха старта: инвалидирует асинхронный старт WG-через-Xray при
      *  disconnect/реконнекте (резолв endpoint'а идёт в рабочем потоке). */
+    /** Ретраи старта WG (режим 5) при транзиентных ошибках (резолв endpoint'а,
+     *  пока сеть пропала/только возвращается). Бэкофф 2→30с, отменяется сменой
+     *  startEpoch (disconnect/новый connect). */
+    private int wgRetryAttempts = 0;
+    private int wgRetryEpoch = -1;
+    private final android.os.Handler mainHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable wgRetryRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (startEpoch.get() != wgRetryEpoch) {
+                return; // отменено: disconnect или пользовательский connect
+            }
+            if (!connected && wgRunner == null) {
+                connect();
+            }
+        }
+    };
+
+    /** Планирует повторный старт WG с бэкоффом (2,4,8,16,30с — далее 30с). */
+    private void scheduleWgRetry(String reason) {
+        wgRetryEpoch = startEpoch.get();
+        long delay = 2000L << Math.min(wgRetryAttempts, 4);
+        if (delay > 30000) {
+            delay = 30000;
+        }
+        wgRetryAttempts++;
+        LogStore.add("Service", "WG: " + reason
+                + " — повторная попытка через " + (delay / 1000) + " с");
+        mainHandler.removeCallbacks(wgRetryRunnable);
+        mainHandler.postDelayed(wgRetryRunnable, delay);
+    }
+
     private final java.util.concurrent.atomic.AtomicInteger startEpoch =
             new java.util.concurrent.atomic.AtomicInteger(0);
 
@@ -67,6 +100,8 @@ public class GrizzlyLandVpnService extends VpnService {
             return START_NOT_STICKY;
         }
         startForeground(NOTIF_ID, buildNotification());
+        // Явный интент (пользователь или смена сети) — новая попытка с нуля.
+        wgRetryAttempts = 0;
         if (ACTION_SET_DEBUG.equals(action)) {
             // Живое применение «Подробного журнала» — реконнект НЕ делаем.
             applyLogFlagLive();
@@ -382,6 +417,7 @@ public class GrizzlyLandVpnService extends VpnService {
         wgRunner = new WgRunner(this::protectFd, config::getLogDebug, new WgRunner.Listener() {
             @Override
             public void onUp() {
+                wgRetryAttempts = 0;
                 connected = true;
                 broadcastState();
                 LogStore.add("Service", "WireGuard: туннель поднят");
@@ -395,7 +431,16 @@ public class GrizzlyLandVpnService extends VpnService {
                 connected = false;
                 broadcastState();
                 stopWgEngine();
-                stopSelf();
+                // Резолв endpoint'а — транзиентная ошибка (сеть пропала или ещё
+                // не поднялась после переключения): не гасим VPN, ретраим с
+                // бэкоффом, иначе короткий сбой сети убивает туннель навсегда
+                // (наблюдалось: «пропал интернет на 5 минут» → VPN мёртв).
+                // Прочие ошибки (битый конфиг, TUN) — фатальны.
+                if (message != null && message.startsWith("резолв")) {
+                    scheduleWgRetry("сеть недоступна (резолв endpoint'а)");
+                } else {
+                    stopSelf();
+                }
             }
         });
         wgRunner.start(tunFd, cfg.ipc);
@@ -876,7 +921,9 @@ public class GrizzlyLandVpnService extends VpnService {
     private void disconnect() {
         connected = false;
         lastError = "";
-        startEpoch.incrementAndGet(); // отменить асинхронный старт WG-через-Xray, если он в полёте
+        startEpoch.incrementAndGet(); // отменить асинхронный старт WG-через-Xray и ретраи WG, если в полёте
+        mainHandler.removeCallbacks(wgRetryRunnable);
+        wgRetryAttempts = 0;
         broadcastState();
         LogStore.add("Service", "==== Отключение ====");
         stopTunFdMonitor();
