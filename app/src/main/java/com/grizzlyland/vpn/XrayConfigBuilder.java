@@ -260,11 +260,10 @@ public class XrayConfigBuilder {
     private static JSONObject baseConfig(ConfigManager c, String logDir) throws JSONException {
         JSONObject o = new JSONObject();
 
-        // Уровень журналирования берём из настроек (для подробного журнала — debug).
-        String level = c.getXrayLoglevel();
-        if (level == null || level.isEmpty()) {
-            level = "info";
-        }
+        // Уровень журналирования управляется ТОЛЬКО флагом «Подробный журнал»
+        // (кнопка в журнале): info по умолчанию, debug — при включённом флаге.
+        // Смена уровня = перезапуск ядра сервисом (без реконнекта VPN).
+        String level = c.getLogDebug() ? "debug" : "info";
         JSONObject log = new JSONObject();
         log.put("loglevel", level);
         // Пишем логи Xray в файлы, чтобы приложение могло показать их в журнале.

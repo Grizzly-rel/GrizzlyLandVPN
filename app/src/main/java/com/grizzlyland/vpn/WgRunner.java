@@ -2,6 +2,7 @@ package com.grizzlyland.vpn;
 
 import android.util.Log;
 
+import java.util.function.BooleanSupplier;
 import java.util.function.IntConsumer;
 
 import libxray.Libxray;
@@ -28,28 +29,34 @@ public class WgRunner {
 
     private final IntConsumer protect;
     private final Listener listener;
+    /** Живой флаг «Подробный журнал»: подробные строки (V:) попадают в журнал
+     *  только при включённом флаге, ошибки (E:) — всегда. Движок при этом ВСЕГДА
+     *  пишет в кольцевой буфер памяти (не на диск), поэтому переключение флага
+     *  применяется на лету, без перезапуска движка. */
+    private final BooleanSupplier verboseSupplier;
     private volatile long handle = -1;
     private volatile boolean engineRunning = false;
     private Thread logPoller;
 
-    public WgRunner(IntConsumer protect, Listener listener) {
+    public WgRunner(IntConsumer protect, BooleanSupplier verboseSupplier, Listener listener) {
         this.protect = protect;
+        this.verboseSupplier = verboseSupplier;
         this.listener = listener;
     }
 
     /**
      * Запускает движок в отдельном потоке (IpcSet/Up могут занять время).
-     * @param verbose подробные логи движка (handshake и пр.) — флаг «Подробный
-     *                журнал»; ошибки движка пишутся в журнал всегда.
+     * Verbose-логи движка (handshake и пр.) всегда пишутся в кольцевой буфер
+     * памяти; видимость их в журнале регулирует живой флаг verboseSupplier.
      */
-    public synchronized void start(int tunFd, String ipcConfig, boolean verbose) {
+    public synchronized void start(int tunFd, String ipcConfig) {
         if (handle != -1) {
             LogStore.add("Wg", "start(): движок уже запущен — пропуск");
             return;
         }
         Thread t = new Thread(() -> {
             try {
-                long h = Libxray.wgTurnOn(ipcConfig, tunFd, verbose);
+                long h = Libxray.wgTurnOn(ipcConfig, tunFd, true);
                 handle = h;
                 engineRunning = true;
                 startLogPoller();
@@ -94,17 +101,25 @@ public class WgRunner {
         logPoller.start();
     }
 
-    /** Забирает накопленные строки журнала движка в LogStore. */
-    private static void drainLogs() {
+    /** Забирает накопленные строки журнала движка в LogStore.
+     *  Подробные строки (префикс V:) проходят только при включённом «Подробном
+     *  журнале» — флаг читается на каждой порции, поэтому кнопка срабатывает
+     *  мгновенно (поллер 0.5с), без перезапуска движка. Ошибки (E:) — всегда. */
+    private void drainLogs() {
         try {
             String chunk = Libxray.wgDrainLogs();
             if (chunk == null || chunk.isEmpty()) {
                 return;
             }
+            boolean verbose = verboseSupplier == null || verboseSupplier.getAsBoolean();
             for (String line : chunk.split("\n")) {
-                if (!line.isEmpty()) {
-                    LogStore.add("Wg", line);
+                if (line.isEmpty()) {
+                    continue;
                 }
+                if (!verbose && line.startsWith("V:")) {
+                    continue;
+                }
+                LogStore.add("Wg", line);
             }
         } catch (Throwable ignored) {
         }

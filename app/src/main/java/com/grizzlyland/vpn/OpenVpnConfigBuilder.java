@@ -105,7 +105,7 @@ public class OpenVpnConfigBuilder {
         sb.append("nobind\n");
         sb.append("persist-key\n");
         sb.append("persist-tun\n");
-        sb.append("verb ").append(c.getOvpnVerb()).append("\n");
+        sb.append("verb ").append(c.getEffectiveOvpnVerb()).append("\n");
 
         appendTuning(sb, c);
 
@@ -127,7 +127,7 @@ public class OpenVpnConfigBuilder {
                     : "socks-proxy " + socksProxy;
             text = patchDirective(text, "socks-proxy", line);
         }
-        text = patchDirective(text, "verb", "verb " + c.getOvpnVerb());
+        text = patchDirective(text, "verb", "verb " + c.getEffectiveOvpnVerb());
         // Нормализуем заголовок PEM в блоке <key>: некоторые экспортёры пишут
         // "-----BEGIN RSA PRIVATE KEY-----" (PKCS#1), а кладут внутрь PKCS#8.
         // mbedTLS в нативном openvpn читает строго по заголовку и падает
@@ -555,7 +555,7 @@ public class OpenVpnConfigBuilder {
         sb.append("nobind\n");
         sb.append("persist-key\n");
         sb.append("persist-tun\n");
-        sb.append("verb ").append(c.getOvpnVerb()).append("\n");
+        sb.append("verb ").append(c.getEffectiveOvpnVerb()).append("\n");
 
         appendTuning(sb, c);
 

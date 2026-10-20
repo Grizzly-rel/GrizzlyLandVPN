@@ -51,8 +51,6 @@ public class XraySettingsActivity extends Activity {
     private android.widget.CheckBox allowInsecure;
     private EditText domainStrategy;
     private android.widget.EditText customJson;
-    private Spinner loglevel;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -146,10 +144,8 @@ public class XraySettingsActivity extends Activity {
         allowInsecure.setChecked(config.getXrayAllowInsecure());
         root.addView(allowInsecure, lp());
 
-        // --- Уровень журналирования Xray (для подробного журнала подключения) ---
-        loglevel = addSpinner(root, "Уровень журнала Xray",
-                new String[]{"warning", "info", "debug", "error", "none"},
-                config.getXrayLoglevel());
+        // Уровень журнала Xray управляется кнопкой «Подробный журнал» на экране
+        // журнала (info ↔ debug, перезапуск ядра на лету) — спиннер убран.
 
         // --- Custom JSON (необязательно; используется в режиме "Только Xray") ---
         TextView customLabel = new TextView(this);
@@ -280,7 +276,6 @@ public class XraySettingsActivity extends Activity {
         headerType.setText(config.getXrayHeaderType());
         domainStrategy.setText(config.getXrayDomainStrategy());
         allowInsecure.setChecked(config.getXrayAllowInsecure());
-        setSpinner(loglevel, config.getXrayLoglevel());
         customJson.setText(config.getXrayCustomJson());
     }
 
@@ -318,7 +313,6 @@ public class XraySettingsActivity extends Activity {
             config.setXrayAllowInsecure(allowInsecure.isChecked());
             config.setXrayDomainStrategy(domainStrategy.getText().toString().trim());
             config.setXrayCustomJson(customJson.getText().toString());
-            config.setXrayLoglevel(loglevel.getSelectedItem().toString());
             GrizzlyLandVpnService.requestApply(this);
             Toast.makeText(this, "Сохранено", Toast.LENGTH_SHORT).show();
             finish();

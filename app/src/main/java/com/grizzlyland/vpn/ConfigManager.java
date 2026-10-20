@@ -390,6 +390,10 @@ public class ConfigManager {
     /** verb OpenVPN (детальность логов). */
     public int getOvpnVerb() { return prefs.getInt(KEY_O_VERB, 3); }
     public void setOvpnVerb(int v) { prefs.edit().putInt(KEY_O_VERB, v).apply(); }
+    /** Начальный verb openvpn: при включённом «Подробном журнале» форсируется 5,
+     *  иначе используется пользовательская настройка. Живое переключение в ходе
+     *  сессии делает сервис management-командой verb (без рестарта). */
+    public int getEffectiveOvpnVerb() { return getLogDebug() ? 5 : getOvpnVerb(); }
 
     /** Общий переключатель подробного журнала (debug): Xray=debug, OpenVPN verb=5. */
     public boolean getLogDebug() { return prefs.getBoolean(KEY_LOG_DEBUG, false); }

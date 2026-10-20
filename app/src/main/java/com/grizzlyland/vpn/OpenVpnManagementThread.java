@@ -540,6 +540,13 @@ public class OpenVpnManagementThread implements Runnable {
         }
     }
 
+    /** Живая смена детальности логов openvpn (management-команда verb) —
+     *  применяется на лету, без перезапуска движка. Используется кнопкой
+     *  «Подробный журнал» (5) и возвратом к обычному уровню. */
+    public void setVerb(int verb) {
+        write("verb " + verb + "\n");
+    }
+
     private void write(String s) {
         if (out == null) {
             return;

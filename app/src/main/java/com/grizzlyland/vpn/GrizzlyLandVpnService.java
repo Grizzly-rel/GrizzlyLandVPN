@@ -28,6 +28,8 @@ public class GrizzlyLandVpnService extends VpnService {
     public static final String ACTION_DISCONNECT = "com.grizzlyland.vpn.DISCONNECT";
     public static final String ACTION_RECONNECT = "com.grizzlyland.vpn.RECONNECT";
     public static final String ACTION_STATE_CHANGED = "com.grizzlyland.vpn.STATE_CHANGED";
+    /** Живое применение флага «Подробный журнал» — БЕЗ реконнекта VPN. */
+    public static final String ACTION_SET_DEBUG = "com.grizzlyland.vpn.SET_DEBUG";
 
     private static final String TAG = "GrizzlyLandVpnService";
     private static final String CHANNEL_ID = "grizzlylandvpn";
@@ -65,6 +67,11 @@ public class GrizzlyLandVpnService extends VpnService {
             return START_NOT_STICKY;
         }
         startForeground(NOTIF_ID, buildNotification());
+        if (ACTION_SET_DEBUG.equals(action)) {
+            // Живое применение «Подробного журнала» — реконнект НЕ делаем.
+            applyLogFlagLive();
+            return START_STICKY;
+        }
         if (ACTION_RECONNECT.equals(action)) {
             // Пересоздать VPN с новыми настройками (применение без перезапуска).
             if (connected) {
@@ -95,6 +102,88 @@ public class GrizzlyLandVpnService extends VpnService {
         Intent i = new Intent(context, GrizzlyLandVpnService.class);
         i.setAction(ACTION_RECONNECT);
         context.startService(i);
+    }
+
+    /** Применить флаг «Подробный журнал» к живому VPN без реконнекта. */
+    public static void requestSetDebug(Context context) {
+        if (!connected) {
+            return;
+        }
+        Intent i = new Intent(context, GrizzlyLandVpnService.class);
+        i.setAction(ACTION_SET_DEBUG);
+        context.startService(i);
+    }
+
+    /**
+     * Живое применение флага «Подробный журнал» (кнопка в журнале), без
+     * реконнекта: OpenVPN — verb через management на лету; Xray — перезапуск
+     * ядра с новым loglevel (TUN/движки переживают, восстановление авто);
+     * WireGuard (реж. 5) — фильтр в памяти WgRunner, делать ничего не нужно.
+     */
+    private void applyLogFlagLive() {
+        boolean verbose = config.getLogDebug();
+        String mode = config.getMode();
+        if (openVpnRunner.isRunning()) {
+            int verb = verbose ? 5 : config.getOvpnVerb();
+            openVpnRunner.setVerb(verb);
+            LogStore.add("Service", "OpenVPN verb → " + verb);
+        }
+        if (xrayRunner.isRunning()) {
+            restartXrayForLogFlag();
+        }
+        if (wgRunner != null && wgRunner.isRunning()) {
+            LogStore.add("Service", verbose
+                    ? "WireGuard: подробные строки движка показаны (фильтр снят)"
+                    : "WireGuard: подробные строки движка скрыты");
+        }
+    }
+
+    /**
+     * Перезапуск ядра Xray с новым loglevel, не трогая TUN и остальные движки.
+     * Активные TCP-соединения приложений оборвутся и переустановятся; в режиме
+     * Xray+OpenVPN сессия openvpn переподключится сама (SOCKS поднимется заново);
+     * WG-движок (реж. «через Xray») поднимет handshake по первому пакету.
+     */
+    private void restartXrayForLogFlag() {
+        String mode = config.getMode();
+        try {
+            xrayRunner.stop();
+            String logDir = getFilesDir().getAbsolutePath();
+            if (ConfigManager.MODE_WG_XRAY.equals(mode)) {
+                if (vpnInterface != null) {
+                    xrayRunner.startTunWg(config, vpnInterface.getFd(), logDir);
+                }
+            } else if (ConfigManager.MODE_XRAY_OVPN.equals(mode)) {
+                xrayRunner.startSocks(config, logDir);
+            } else if (vpnInterface != null) {
+                // Режим «только Xray»: custom-конфиг или собранный из полей.
+                String custom = config.getXrayCustomJson();
+                if (custom != null && !custom.trim().isEmpty()) {
+                    xrayRunner.startTunCustom(config, vpnInterface.getFd(), logDir);
+                } else {
+                    xrayRunner.startTun(config, vpnInterface.getFd(), logDir);
+                }
+            }
+            LogStore.add("Service", "Xray перезапущен (loglevel="
+                    + (config.getLogDebug() ? "debug" : "info") + "), TUN не пересоздавался");
+        } catch (Exception e) {
+            Log.e(TAG, "Xray restart (log flag) failed", e);
+            LogStore.add("Service", "ОШИБКА перезапуска Xray: " + e);
+            lastError = e.getMessage();
+            connected = false;
+            broadcastState();
+            openVpnRunner.stop();
+            stopSshTunnel();
+            stopWgEngine();
+            if (vpnInterface != null) {
+                try {
+                    vpnInterface.close();
+                } catch (Exception ignored) {
+                }
+                vpnInterface = null;
+            }
+            stopSelf();
+        }
     }
 
     private void connect() {
@@ -290,7 +379,7 @@ public class GrizzlyLandVpnService extends VpnService {
         // disconnect() не закрыл fd, которым владеет wireguard-go.
         final int tunFd = vpnInterface.detachFd();
         stopWgEngine();
-        wgRunner = new WgRunner(this::protectFd, new WgRunner.Listener() {
+        wgRunner = new WgRunner(this::protectFd, config::getLogDebug, new WgRunner.Listener() {
             @Override
             public void onUp() {
                 connected = true;
@@ -309,7 +398,7 @@ public class GrizzlyLandVpnService extends VpnService {
                 stopSelf();
             }
         });
-        wgRunner.start(tunFd, cfg.ipc, config.getLogDebug());
+        wgRunner.start(tunFd, cfg.ipc);
     }
 
     /** Останавливает WG-движок, сетевой колбэк и (если жив) TUN-обёртку. */
@@ -523,6 +612,17 @@ public class GrizzlyLandVpnService extends VpnService {
             wgNetCallback = new android.net.ConnectivityManager.NetworkCallback() {
                 @Override
                 public void onAvailable(android.net.Network network) {
+                    // Собственная VPN-сеть (tun) тоже приходит в default-callback.
+                    // Её игнорируем ПОЛНОСТЬЮ (в т.ч. не трогаем wgLastNetwork):
+                    // иначе каждый реконнект VPN порождает «сменилась сеть» →
+                    // новый реконнект → бесконечный цикл рестартов (наблюдалось
+                    // ~2.5 рестарта/сек: VPN поднялся → default=VPN → событие →
+                    // реконнект → default=Wi-Fi → событие → …).
+                    android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+                    if (caps != null
+                            && caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) {
+                        return;
+                    }
                     // Только дефолтная сеть (registerDefaultNetworkCallback):
                     // перезапуск нужен один раз при реальной смене сети, иначе
                     // колбэк по каждой сети (Wi-Fi + LTE) даёт цикл рестартов.

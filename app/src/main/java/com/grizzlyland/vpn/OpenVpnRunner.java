@@ -39,6 +39,15 @@ public class OpenVpnRunner {
         return running;
     }
 
+    /** Живая смена verb openvpn через management-интерфейс (кнопка «Подробный
+     *  журнал»), без перезапуска движка. Молча игнорируется, если движок не стартован. */
+    public void setVerb(int verb) {
+        OpenVpnManagementThread m = managementThread;
+        if (m != null) {
+            m.setVerb(verb);
+        }
+    }
+
     /** Сообщает раннеру локальный порт SSH-форварда (вызывается сервисом до start). */
     public void setSshLocalPort(int port) {
         this.sshLocalPort = port;

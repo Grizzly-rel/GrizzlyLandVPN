@@ -26,6 +26,20 @@ public class XrayRunner {
 
     private volatile boolean running = false;
 
+    /**
+     * Обнуляет файлы логов прошлых сессий. Xray открывает их в append-режиме —
+     * без этого они растут от сессии к сессии неограниченно. Вызывать ДО
+     * Libxray.run(): новый инстанс создаст файлы заново, а хвостовик начнёт
+     * читать с нуля (existed=false → pos=0).
+     */
+    private static void resetLogFiles(String logDir) {
+        if (logDir == null) {
+            return;
+        }
+        new File(logDir, "xray_access.log").delete();
+        new File(logDir, "xray_error.log").delete();
+    }
+
     public boolean isRunning() {
         return running;
     }
@@ -35,6 +49,7 @@ public class XrayRunner {
         if (running) {
             return;
         }
+        resetLogFiles(logDir);
         Libxray.setTunFd(tunFd);
         String json = XrayConfigBuilder.buildTun(config, logDir);
         Log.i(TAG, "Starting Xray (TUN mode), fd=" + tunFd + " config:\n" + json);
@@ -58,6 +73,7 @@ public class XrayRunner {
         if (running) {
             return;
         }
+        resetLogFiles(logDir);
         Libxray.setTunFd(tunFd);
         String json = XrayConfigBuilder.buildTunWg(config, logDir);
         Log.i(TAG, "Starting Xray (TUN+WG mode), fd=" + tunFd + " config:\n" + json);
@@ -80,6 +96,7 @@ public class XrayRunner {
         if (running) {
             return;
         }
+        resetLogFiles(logDir);
         String raw = config.getXrayCustomJson();
         if (raw == null || raw.trim().isEmpty()) {
             LogStore.add("Xray", "ОШИБКА: custom-конфиг пуст");
@@ -140,6 +157,7 @@ public class XrayRunner {
         if (running) {
             return;
         }
+        resetLogFiles(logDir);
         String json = XrayConfigBuilder.build(config, logDir);
         Log.i(TAG, "Starting Xray (SOCKS mode) config:\n" + json);
         LogStore.add("Xray", "Запуск Xray (SOCKS) на 127.0.0.1:" + config.getXraySocksPort());
@@ -181,10 +199,8 @@ public class XrayRunner {
 
     /** Подставляет log-настройки (уровень + файлы) в пользовательский custom-конфиг. */
     private static void applyLogConfig(JSONObject o, ConfigManager config, String logDir) throws Exception {
-        String level = config.getXrayLoglevel();
-        if (level == null || level.isEmpty()) {
-            level = "info";
-        }
+        // Уровень управляется флагом «Подробный журнал» (см. XrayConfigBuilder.baseConfig).
+        String level = config.getLogDebug() ? "debug" : "info";
         JSONObject log = new JSONObject();
         log.put("loglevel", level);
         if (logDir != null) {

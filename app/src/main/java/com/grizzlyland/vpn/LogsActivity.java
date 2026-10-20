@@ -125,21 +125,15 @@ public class LogsActivity extends Activity implements LogStore.Listener {
         });
     }
 
-    /** Включает/выключает подробный журнал (Xray=debug, OpenVPN verb=5) и переподключает. */
+    /** Включает/выключает подробный журнал. Применяется на лету БЕЗ реконнекта:
+     *  OpenVPN — verb через management, Xray — перезапуск ядра с новым loglevel,
+     *  WireGuard — фильтр в памяти. Механизмы выбирает сервис (ACTION_SET_DEBUG). */
     private void toggleDebug() {
         boolean on = !config.getLogDebug();
         config.setLogDebug(on);
-        if (on) {
-            config.setXrayLoglevel("debug");
-            config.setOvpnVerb(5);
-            LogStore.add("Log", "Подробный журнал ВКЛЮЧЁН (Xray=debug, OpenVPN verb=5)");
-        } else {
-            config.setXrayLoglevel("info");
-            config.setOvpnVerb(3);
-            LogStore.add("Log", "Подробный журнал ВЫКЛЮЧЕН (Xray=info, OpenVPN verb=3)");
-        }
+        LogStore.add("Log", on ? "Подробный журнал включён" : "Подробный журнал выключен");
         updateDebugButton();
-        GrizzlyLandVpnService.requestApply(this);
+        GrizzlyLandVpnService.requestSetDebug(this);
     }
 
     private void updateDebugButton() {
