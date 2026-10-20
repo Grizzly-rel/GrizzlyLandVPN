@@ -50,17 +50,16 @@ public class XrayRunner {
     /**
      * Запуск Xray в TUN-режиме "WireGuard через Xray": tun-вход, дефолтный
      * outbound — wireguard, чей UDP завёрнут в proxy через dialerProxy.
-     * @param resolvedEndpoint endpoint первого peer в виде host:port, где host —
-     *        уже резолвленный IP (или IP-литерал); резолвится в сервисе ДО
-     *        создания TUN (см. XrayConfigBuilder.resolveWgEndpoint).
+     * Endpoint peer передаётся в конфиг КАК ЕСТЬ (домен или IP): домен Xray
+     * резолвит сам через свой DNS-модуль, чьи запросы идут через proxy
+     * (правило inboundTag "dns-internal" → proxy) — «DNS через Xray».
      */
-    public synchronized void startTunWg(ConfigManager config, int tunFd, String logDir,
-                                        String resolvedEndpoint) throws Exception {
+    public synchronized void startTunWg(ConfigManager config, int tunFd, String logDir) throws Exception {
         if (running) {
             return;
         }
         Libxray.setTunFd(tunFd);
-        String json = XrayConfigBuilder.buildTunWg(config, logDir, resolvedEndpoint);
+        String json = XrayConfigBuilder.buildTunWg(config, logDir);
         Log.i(TAG, "Starting Xray (TUN+WG mode), fd=" + tunFd + " config:\n" + json);
         LogStore.add("Xray", "Запуск Xray (TUN+WG), fd=" + tunFd);
         LogStore.add("Xray", "Конфиг:\n" + json);

@@ -16,6 +16,7 @@ import android.widget.Toast;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Map;
 
 import libxray.Libxray;
 
@@ -29,6 +30,7 @@ public class WgSettingsActivity extends Activity {
 
     private static final int REQ_EXPORT = 2301;
     private static final int REQ_IMPORT = 2302;
+    private static final int REQ_QR_SCAN = 2303;
 
     private ConfigManager config;
     private EditText raw;
@@ -85,6 +87,27 @@ public class WgSettingsActivity extends Activity {
                 LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
         root.addView(io, lp());
+
+        // QR — как в оригинальном приложении WireGuard: конфиг целиком кодируется
+        // в QR (сканировать с другого устройства или с бумаги) и показывается QR
+        // текущего конфига (перенос на другое устройство).
+        LinearLayout ioQr = new LinearLayout(this);
+        ioQr.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button qrScanBtn = new Button(this);
+        qrScanBtn.setText("Сканировать QR");
+        qrScanBtn.setOnClickListener(v -> startActivityForResult(
+                new Intent(this, QrScanActivity.class), REQ_QR_SCAN));
+        ioQr.addView(qrScanBtn, new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        Button qrShowBtn = new Button(this);
+        qrShowBtn.setText("Показать QR");
+        qrShowBtn.setOnClickListener(v -> showQr());
+        ioQr.addView(qrShowBtn, new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        root.addView(ioQr, lp());
 
         TextView rawLabel = new TextView(this);
         rawLabel.setText("Конфиг wg-quick");
@@ -172,23 +195,115 @@ public class WgSettingsActivity extends Activity {
                 while ((n = is.read(buf)) != -1) {
                     bos.write(buf, 0, n);
                 }
-                String text = new String(bos.toByteArray(), "UTF-8");
-                config.setWgRaw(text);
-                raw.setText(text);
-                WgConfigParser.WgConfig cfg = WgConfigParser.parse(text);
-                GrizzlyLandVpnService.requestApply(this);
-                if (cfg.valid) {
-                    Toast.makeText(this, "Конфиг .conf импортирован", Toast.LENGTH_SHORT).show();
-                } else {
-                    Toast.makeText(this, "Импортировано, но конфиг неполный "
-                            + "(нужны [Interface] PrivateKey и [Peer] PublicKey)",
-                            Toast.LENGTH_LONG).show();
-                }
+                applyImportedConfig(new String(bos.toByteArray(), "UTF-8"),
+                        "Конфиг .conf импортирован");
             } catch (Exception e) {
                 Toast.makeText(this, "Ошибка импорта: " + e.getMessage(),
                         Toast.LENGTH_LONG).show();
             }
+        } else if (requestCode == REQ_QR_SCAN) {
+            String text = data.getStringExtra("text");
+            if (text == null || text.trim().isEmpty()) {
+                Toast.makeText(this, "QR отсканирован, но текст пуст", Toast.LENGTH_LONG).show();
+                return;
+            }
+            applyImportedConfig(text, "Конфиг импортирован из QR");
         }
+    }
+
+    /**
+     * Применяет импортированный конфиг (из файла или QR): сохраняет, показывает
+     * в поле, валидирует и перезапускает VPN, если он подключён.
+     */
+    private void applyImportedConfig(String text, String okMessage) {
+        config.setWgRaw(text);
+        raw.setText(text);
+        WgConfigParser.WgConfig cfg = WgConfigParser.parse(text);
+        GrizzlyLandVpnService.requestApply(this);
+        if (cfg.valid) {
+            Toast.makeText(this, okMessage, Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, okMessage + ", но конфиг неполный "
+                    + "(нужны [Interface] PrivateKey и [Peer] PublicKey)",
+                    Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /**
+     * Показывает текущий конфиг как QR-код (как экспорт в оригинальном
+     * приложении WireGuard) — для переноса на другое устройство сканированием.
+     */
+    private void showQr() {
+        String text = raw.getText().toString();
+        if (text.trim().isEmpty()) {
+            text = config.getWgRaw();
+        }
+        if (text.trim().isEmpty()) {
+            Toast.makeText(this, "Конфиг пуст — показать нечего", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final String conf = text;
+        // Генерация BitMatrix ~1000x1000 модулей занимает заметное время — в фоне.
+        new Thread(() -> {
+            try {
+                int side = Math.min(getResources().getDisplayMetrics().widthPixels,
+                        getResources().getDisplayMetrics().heightPixels) - 80;
+                final android.graphics.Bitmap bmp = qrBitmap(conf, side);
+                runOnUiThread(() -> showQrDialog(bmp));
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this,
+                        "Ошибка генерации QR: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }, "wg-qr-gen").start();
+    }
+
+    private void showQrDialog(android.graphics.Bitmap bmp) {
+        android.widget.ImageView iv = new android.widget.ImageView(this);
+        iv.setImageBitmap(bmp);
+        iv.setAdjustViewBounds(true);
+        android.widget.LinearLayout box = new android.widget.LinearLayout(this);
+        box.setOrientation(android.widget.LinearLayout.VERTICAL);
+        box.setPadding(24, 24, 24, 24);
+        box.setGravity(Gravity.CENTER_HORIZONTAL);
+        TextView note = new TextView(this);
+        note.setText("Отсканируйте этот QR в WireGuard (или в этом приложении) "
+                + "на другом устройстве");
+        note.setTextSize(12);
+        note.setPadding(0, 0, 0, 12);
+        box.addView(note);
+        box.addView(iv);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Конфиг WireGuard — QR")
+                .setView(box)
+                .setPositiveButton("Закрыть", null)
+                .show();
+    }
+
+    /**
+     * QR-код из текста (zxing core): CHARACTER_SET=UTF-8 (с ECI-сегментом,
+     * чтобы сканеры корректно читали не-ASCII), коррекция M, поле 2 модуля.
+     */
+    private static android.graphics.Bitmap qrBitmap(String text, int sidePx) throws Exception {
+        Map<com.google.zxing.EncodeHintType, Object> hints =
+                new java.util.EnumMap<>(com.google.zxing.EncodeHintType.class);
+        hints.put(com.google.zxing.EncodeHintType.CHARACTER_SET, "UTF-8");
+        hints.put(com.google.zxing.EncodeHintType.ERROR_CORRECTION,
+                com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.M);
+        hints.put(com.google.zxing.EncodeHintType.MARGIN, 2);
+        com.google.zxing.qrcode.QRCodeWriter writer = new com.google.zxing.qrcode.QRCodeWriter();
+        com.google.zxing.common.BitMatrix m =
+                writer.encode(text, com.google.zxing.BarcodeFormat.QR_CODE, sidePx, sidePx, hints);
+        int w = m.getWidth(), h = m.getHeight();
+        android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(
+                w, h, android.graphics.Bitmap.Config.RGB_565);
+        int[] pixels = new int[w * h];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                pixels[y * w + x] = m.get(x, y) ? 0xFF000000 : 0xFFFFFFFF;
+            }
+        }
+        bmp.setPixels(pixels, 0, w, 0, 0, w, h);
+        return bmp;
     }
 
     /**

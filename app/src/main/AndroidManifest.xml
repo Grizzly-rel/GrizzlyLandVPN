@@ -7,6 +7,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Сканер QR-конфигов WireGuard (QrScanActivity). Камера не обязательна:
+         приложение полностью работает и без неё. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" xmlns:tools="http://schemas.android.com/tools" />
 
@@ -34,6 +39,9 @@
         <activity android:name=".OpenVpnSettingsActivity" android:exported="false" />
         <activity android:name=".SshSettingsActivity" android:exported="false" />
         <activity android:name=".WgSettingsActivity" android:exported="false" />
+        <activity android:name=".QrScanActivity" android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
         <activity android:name=".LogsActivity" android:exported="false" />
 
         <service

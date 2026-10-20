@@ -59,9 +59,13 @@ public class XrayConfigBuilder {
      *
      * Порядок outbounds важен: ПЕРВЫЙ outbound в Xray — дефолтный (все маршруты,
      * не попавшие в правила). DNS (порт 53 из TUN) идёт в dns-out (модуль Xray),
-     * а его собственные запросы уходят в дефолт — то есть тоже сквозь WG-туннель.
+     * а собственные запросы DNS-модуля уходят через ПЕРВОЕ правило routing
+     * (inboundTag "dns-internal" → proxy) — сквозь VLESS-туннель. Это и есть
+     * «DNS через Xray»: домен endpoint'а WG резолвится самим Xray через прокси
+     * (локальный DNS/РКН не участвует), и петля «резолв через несозданный
+     * WG-туннель» не возникает.
      */
-    public static String buildTunWg(ConfigManager c, String logDir, String resolvedEndpoint) {
+    public static String buildTunWg(ConfigManager c, String logDir) {
         try {
             WgConfigParser.WgConfig wg = WgConfigParser.parse(c.getWgRaw());
             if (!wg.valid) {
@@ -76,9 +80,32 @@ public class XrayConfigBuilder {
             inbounds.put(socksInbound(c));
             o.put("inbounds", inbounds);
 
+            // Правило маршрутизации запросов САМОГО DNS-модуля: они несут
+            // inboundTag "dns-internal" (app/dns/nameserver.go ставит его через
+            // session.ContextWithInbound). Без этого правила запросы ушли бы в
+            // дефолтный outbound — wg-out — и получилась бы петля: wg-out не
+            // может подняться, пока его endpoint не зарезолвлен, а резолв идёт
+            // через wg-out. Через proxy (VLESS) резолв идёт сквозь туннель и не
+            // зависит от локального DNS (при блокировках локальный DNS может
+            // отказывать/отравляться). Правило вставляем ПЕРВЫМ.
+            JSONObject routing = o.getJSONObject("routing");
+            JSONArray oldRules = routing.getJSONArray("rules");
+            JSONObject dnsInternalRule = new JSONObject();
+            dnsInternalRule.put("type", "field");
+            JSONArray dnsTag = new JSONArray();
+            dnsTag.put("dns-internal");
+            dnsInternalRule.put("inboundTag", dnsTag);
+            dnsInternalRule.put("outboundTag", "proxy");
+            JSONArray rules = new JSONArray();
+            rules.put(dnsInternalRule);
+            for (int i = 0; i < oldRules.length(); i++) {
+                rules.put(oldRules.get(i));
+            }
+            routing.put("rules", rules);
+
             JSONArray outbounds = new JSONArray();
             // Дефолт (первый) — WG: весь трафик TUN уходит в WG-туннель.
-            outbounds.put(wgOutbound(wg, c, resolvedEndpoint));
+            outbounds.put(wgOutbound(wg, c));
             // Прокси (VLESS и т.п.) — тот же outbound, что и в остальных режимах;
             // на него ссылается dialerProxy WG-outbound'а.
             JSONObject proxy = new JSONObject();
@@ -106,14 +133,19 @@ public class XrayConfigBuilder {
      * ПЕРВЫЙ peer: listenFunc WG-клиента Xray привязывает UDP-сокет к endpoint'у
      * peers[0], пакеты к остальным peer ушли бы туда же.
      */
-    private static JSONObject wgOutbound(WgConfigParser.WgConfig wg, ConfigManager c,
-                                         String resolvedEndpoint) throws JSONException {
+    private static JSONObject wgOutbound(WgConfigParser.WgConfig wg, ConfigManager c) throws JSONException {
         WgConfigParser.PeerInfo peer = wg.peerList.get(0);
         if (peer.endpoint.isEmpty()) {
             throw new IllegalStateException("В конфиге WireGuard не задан Endpoint peer");
         }
-        String endpoint = (resolvedEndpoint != null && !resolvedEndpoint.isEmpty())
-                ? resolvedEndpoint : resolveWgEndpoint(peer.endpoint);
+        // Endpoint оставляем КАК В КОНФИГЕ (домен или IP): домен резолвит сам Xray
+        // через свой DNS-модуль (запросы идут через proxy — см. правило
+        // "dns-internal" в buildTunWg), локальный системный DNS не участвует.
+        // IP-литерал проходит насквозь без резолва. Резолв происходит лениво,
+        // при первом трафике через outbound (Process → init → IpcSet →
+        // ParseEndpoint/ParseDestination), и при неудаче повторяется на
+        // следующем пакете — режим не умирает от разового сбоя DNS.
+        String endpoint = peer.endpoint;
 
         JSONObject out = new JSONObject();
         out.put("tag", "wg-out");
@@ -142,12 +174,18 @@ public class XrayConfigBuilder {
             p.put("preSharedKey", peer.pskHex);
         }
         p.put("endpoint", endpoint);
+        // PersistentKeepalive: туннель постоянный, без него NAT-мэппинг на пути
+        // «телефон → VLESS → интернет» рвётся и входящие/фоновые сессии умирают.
+        // Берём значение из wg-конфига; если не задано — 25 секунд (стандарт WG
+        // для клиентов за NAT). Явный 0 в конфиге отключает keepalive.
+        int keepalive = 25;
         if (!peer.keepalive.isEmpty()) {
             try {
-                p.put("keepAlive", Integer.parseInt(peer.keepalive.trim()));
+                keepalive = Integer.parseInt(peer.keepalive.trim());
             } catch (NumberFormatException ignored) {
             }
         }
+        p.put("keepAlive", keepalive);
         if (!peer.allowed.isEmpty()) {
             JSONArray ai = new JSONArray();
             for (String cidr : peer.allowed) {
@@ -185,71 +223,19 @@ public class XrayConfigBuilder {
 
         // КЛЮЧЕВОЕ место режима: UDP-сокет WG к серверу dialится через outbound
         // с тегом "proxy" (VLESS/Reality) — UDP-over-XUDP внутри прокси-соединения.
+        // domainStrategy UseIPv4 заставляет DialSystem (bind.Open → listenFunc)
+        // резолвить домен endpoint'а через DNS-модуль Xray (LookupForIP → app/dns),
+        // чьи запросы уходят через proxy — а не через системный резолвер. Заодно
+        // resolveLocal() фильтрует ответ до IPv4, так что endpoint, который
+        // wireguard-go получает через ParseEndpoint, совпадает с IP подключённого
+        // UDP-сокета. Для IP-литерала ветка резолва просто не выполняется.
         JSONObject ss = new JSONObject();
         JSONObject sockopt = new JSONObject();
         sockopt.put("dialerProxy", "proxy");
+        sockopt.put("domainStrategy", "UseIPv4");
         ss.put("sockopt", sockopt);
         out.put("streamSettings", ss);
         return out;
-    }
-
-    /**
-     * Резолвит домен в endpoint'е WG ЗАРАНЕЕ, на стороне приложения.
-     *
-     * Зачем: WG-outbound резолвит endpoint через DNS-модуль Xray (bind.ParseEndpoint
-     * → resolveFunc → app/dns), а запросы DNS-модуля в этом режиме уходят в
-     * дефолтный outbound — то есть снова в wg-out, который не может подняться,
-     * пока его endpoint не зарезолвлен. Получается цикл «резолв через
-     * несозданный туннель» (на практике: IpcSet падает по таймаутам DNS, режим
-     * не стартует). Java-резолв идёт штатной сетью мимо TUN (свой трафик
-     * приложения исключён из VPN), поэтому цикл разрывается. IP-адрес в
-     * endpoint'е проходит насквозь без изменений; при реконнекте конфиг
-     * строится заново — адрес перепосвежается.
-     *
-     * ВАЖНО: вызывать ДО establish() TUN — резолв при уже поднятом туннеле
-     * уходит в VPN-заглушку DNS и ломается (проверено на устройстве).
-     */
-    public static String resolveWgEndpoint(String endpoint) {
-        int colon = endpoint.lastIndexOf(':');
-        if (colon <= 0 || colon == endpoint.length() - 1) {
-            throw new IllegalStateException("Некорректный Endpoint peer: \"" + endpoint + "\" (нужен host:port)");
-        }
-        String host = endpoint.substring(0, colon);
-        String port = endpoint.substring(colon + 1);
-        if (isPlainIpv4(host) || host.startsWith("[")) {
-            return endpoint; // уже IP (или скобочный IPv6) — резолв не нужен
-        }
-        // Две попытки: разовый сбой резолва (особенно сразу после пробуждения
-        // сети) не должен ронять подключение.
-        String lastErr = "";
-        for (int attempt = 0; attempt < 2; attempt++) {
-            try {
-                java.net.InetAddress[] addrs = java.net.InetAddress.getAllByName(host);
-                String picked = null;
-                for (java.net.InetAddress a : addrs) {
-                    if (a instanceof java.net.Inet4Address) {
-                        picked = a.getHostAddress();
-                        break;
-                    }
-                }
-                if (picked == null && addrs.length > 0) {
-                    picked = addrs[0].getHostAddress();
-                }
-                if (picked != null) {
-                    return picked + ":" + port;
-                }
-                lastErr = "сервер не вернул адресов";
-            } catch (Exception e) {
-                lastErr = e.getClass().getSimpleName()
-                        + (e.getMessage() == null ? "" : (": " + e.getMessage()));
-            }
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException ignored) {
-            }
-        }
-        throw new IllegalStateException("Не удалось резолвить WG endpoint \""
-                + host + "\": " + lastErr);
     }
 
     /** Строгая проверка IPv4 (для remoteDNS wireguard-outbound). */
@@ -291,7 +277,13 @@ public class XrayConfigBuilder {
         // DNS. Серверы поддерживают форматы Xray (UDP, "tcp://", "https://" DoH,
         // "ip:853" DoT). queryStrategy по умолчанию UseIPv4 — tun IPv4-only, чтобы
         // не слать бесполезные AAAA-запросы.
+        // Явный тег DNS-модуля: его внутренние запросы получают inboundTag
+        // "dns-internal" (app/dns ставит его через session.ContextWithInbound) —
+        // в режиме WG-через-Xray по этому тегу их можно направить через proxy.
+        // В остальных режимах тег ни на что не влияет (правила по нему нет,
+        // запросы уходят в дефолтный outbound, как и раньше).
         JSONObject dns = new JSONObject();
+        dns.put("tag", "dns-internal");
         dns.put("servers", dnsArray(c));
         String qs = c.getXrayQueryStrategy();
         if (qs != null && !qs.isEmpty()) {

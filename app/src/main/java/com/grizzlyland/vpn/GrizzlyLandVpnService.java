@@ -355,21 +355,20 @@ public class GrizzlyLandVpnService extends VpnService {
         LogStore.add("Service", "WG-через-Xray: endpoint=" + cfg.endpointForLog
                 + " адресов=" + cfg.addresses.size() + " peer=" + cfg.peers
                 + " mtu=" + (cfg.mtu > 0 ? cfg.mtu : 1420));
-        // Резолв домена endpoint'а делаем в РАБОЧЕМ потоке (сетевые операции
-        // запрещены на главном) и ДО создания TUN: при живом туннеле резолв
-        // уходит в VPN-заглушку DNS и ломается, а внутри Xray получилась бы
-        // петля «резолв через несозданный WG-туннель».
+        // Endpoint резолвит САМ Xray через свой DNS-модуль (лениво, при первом
+        // трафике через wg-outbound), а запросы DNS-модуля идут через proxy
+        // (VLESS) — правило inboundTag "dns-internal" в buildTunWg. Это «DNS
+        // через Xray»: локальный системный DNS не участвует вовсе, поэтому
+        // блокировки/отравление локального DNS не мешают резолву endpoint'а.
+        // Java-резолв на стороне приложения убран (он зависел от системного DNS).
         final int myEpoch = startEpoch.get();
-        final String epRaw = cfg.peerList.get(0).endpoint;
         final android.os.ParcelFileDescriptor[] holder = new android.os.ParcelFileDescriptor[1];
         new Thread(() -> {
             try {
-                String resolvedEndpoint = XrayConfigBuilder.resolveWgEndpoint(epRaw);
                 if (startEpoch.get() != myEpoch) {
                     LogStore.add("Service", "Старт WG-через-Xray отменён (состояние изменилось)");
                     return;
                 }
-                LogStore.add("Service", "WG endpoint: " + epRaw + " -> " + resolvedEndpoint);
                 ParcelFileDescriptor tun = buildBuilder(null, 1400, null, null).establish();
                 if (tun == null) {
                     LogStore.add("Service", "ОШИБКА: VpnService не разрешил TUN (WG через Xray)");
@@ -390,7 +389,7 @@ public class GrizzlyLandVpnService extends VpnService {
                     return;
                 }
                 String logDir = getFilesDir().getAbsolutePath();
-                xrayRunner.startTunWg(config, tun.getFd(), logDir, resolvedEndpoint);
+                xrayRunner.startTunWg(config, tun.getFd(), logDir);
                 connected = true;
                 broadcastState();
                 // UDP-сокет WG живёт внутри Xray: при смене сети пересоздаём туннель
