@@ -309,7 +309,7 @@ public class GrizzlyLandVpnService extends VpnService {
                 stopSelf();
             }
         });
-        wgRunner.start(tunFd, cfg.ipc);
+        wgRunner.start(tunFd, cfg.ipc, config.getLogDebug());
     }
 
     /** Останавливает WG-движок, сетевой колбэк и (если жив) TUN-обёртку. */

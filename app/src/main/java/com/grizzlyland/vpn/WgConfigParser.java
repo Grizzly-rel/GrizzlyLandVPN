@@ -111,7 +111,16 @@ public class WgConfigParser {
         String section = "";
         for (String rawLine : raw.split("\n")) {
             String line = rawLine.trim();
-            if (line.isEmpty() || line.startsWith("#") || line.startsWith(";")) {
+            // Инлайн-комментарии: «Endpoint = host port # Внешний IP сервера».
+            // '#' не встречается ни в одном значении wg-quick (base64/hex/IP/
+            // порт/CIDR), поэтому срезаем всё от первого '#' — иначе нормализация
+            // «host port»→«host:port» превращает хвост комментария в мусорный
+            // порт и движок падает на «invalid port».
+            int hash = line.indexOf('#');
+            if (hash >= 0) {
+                line = line.substring(0, hash).trim();
+            }
+            if (line.isEmpty() || line.startsWith(";")) {
                 continue;
             }
             if (line.startsWith("[")) {
