@@ -36,6 +36,12 @@ public class ConfigManager {
      * (SSH форвардит только TCP), поэтому здесь роль SSH играет xray.
      */
     public static final String MODE_WG_XRAY = "wireguard_xray";
+    /**
+     * AmneziaWG: отдельный режим поверх движка amneziawg-go (обфусцированный
+     * WireGuard). Схема работы — как MODE_WG, но UAPI-конфиг движка дополняется
+     * параметрами обфускации Jc/Jmin/Jmax/S1/S2/H1..H4 из конфига.
+     */
+    public static final String MODE_AWG = "amneziawg";
 
     private static final String PREFS = "grizzlyland_config";
 
@@ -121,7 +127,13 @@ public class ConfigManager {
     /** Сырой wg-quick конфиг (источник истины для режима WireGuard). */
     private static final String KEY_WG_RAW = "wg_raw";
 
+    // --- AmneziaWG (режим amneziawg) ---
+    /** Сырой wg-quick конфиг (+ опциональные параметры обфускации). */
+    private static final String KEY_A_RAW = "awg_raw";
+
     private static final String KEY_ALLOWED = "allowed_apps";
+    /** Режим «VPN для всего телефона»: per-app список игнорируется. */
+    private static final String KEY_ALL_APPS = "vpn_all_apps";
 
     private final SharedPreferences prefs;
 
@@ -136,6 +148,22 @@ public class ConfigManager {
 
     public void setMode(String v) {
         prefs.edit().putString(KEY_MODE, v).apply();
+    }
+
+    // ===== Автовосстановление после перезагрузки/падения =====
+    /** «Хотел подключён»: ставится при любом подключении, снимается ТОЛЬКО явным
+     *  отключением (кнопка/уведомление) или отзывом VPN системой (onRevoke).
+     *  По нему BootReceiver и рестарт после падения решают, восстанавливать ли
+     *  соединение. Ошибки подключения флаг НЕ снимают (сеть могла ещё не
+     *  подняться). В экспорт/импорт настроек НЕ входит (это runtime-состояние). */
+    private static final String KEY_WANT_CONNECTED = "vpn_want_connected";
+
+    public boolean getWantConnected() {
+        return prefs.getBoolean(KEY_WANT_CONNECTED, false);
+    }
+
+    public void setWantConnected(boolean v) {
+        prefs.edit().putBoolean(KEY_WANT_CONNECTED, v).apply();
     }
 
     // ===== SSH (режим OpenVPN-через-SSH) =====
@@ -184,6 +212,11 @@ public class ConfigManager {
     /** Сырой wg-quick конфиг: [Interface]/[Peer] как в стандартном .conf. */
     public String getWgRaw() { return prefs.getString(KEY_WG_RAW, ""); }
     public void setWgRaw(String v) { prefs.edit().putString(KEY_WG_RAW, v == null ? "" : v).apply(); }
+
+    // ===== AmneziaWG (режим amneziawg) =====
+    /** Сырой конфиг: [Interface]/[Peer] как в стандартном .conf (+ Jc/Jmin/Jmax/S1/S2/H1..H4). */
+    public String getAwgRaw() { return prefs.getString(KEY_A_RAW, ""); }
+    public void setAwgRaw(String v) { prefs.edit().putString(KEY_A_RAW, v == null ? "" : v).apply(); }
 
     // ===== Xray =====
     public String getXrayProtocol() { return prefs.getString(KEY_X_PROTOCOL, "vless"); }
@@ -408,6 +441,12 @@ public class ConfigManager {
         prefs.edit().putStringSet(KEY_ALLOWED, new HashSet<>(apps)).apply();
     }
 
+    /** Режим «VPN для всего телефона»: туннель без allowed-фильтра
+     *  (собственный пакет всё равно исключается), per-app список не действует. */
+    public boolean getVpnAllApps() { return prefs.getBoolean(KEY_ALL_APPS, false); }
+
+    public void setVpnAllApps(boolean v) { prefs.edit().putBoolean(KEY_ALL_APPS, v).apply(); }
+
     // ===== Экспорт / импорт настроек (JSON) =====
 
     /** Сериализует ВСЕ настройки (режим + Xray + OpenVPN + per-app) в JSON-строку. */
@@ -420,6 +459,7 @@ public class ConfigManager {
             o.put("openvpn", openvpnToJson());
             o.put("ssh", sshToJson());
             o.put("wg", wgToJson());
+            o.put("awg", awgToJson());
             o.put("logDebug", getLogDebug());
 
             JSONArray apps = new JSONArray();
@@ -427,6 +467,7 @@ public class ConfigManager {
                 apps.put(a);
             }
             o.put("allowedApps", apps);
+            o.put("allApps", getVpnAllApps());
 
             return o.toString(2);
         } catch (JSONException e) {
@@ -544,6 +585,11 @@ public class ConfigManager {
             applyWg(wg);
         }
 
+        JSONObject awg = o.optJSONObject("awg");
+        if (awg != null) {
+            applyAwg(awg);
+        }
+
         if (o.has("logDebug")) {
             setLogDebug(o.getBoolean("logDebug"));
         }
@@ -555,6 +601,10 @@ public class ConfigManager {
                 s.add(apps.getString(i));
             }
             setAllowedApps(s);
+        }
+
+        if (o.has("allApps")) {
+            setVpnAllApps(o.getBoolean("allApps"));
         }
     }
 
@@ -663,5 +713,15 @@ public class ConfigManager {
 
     private void applyWg(JSONObject w) throws JSONException {
         if (w.has("raw")) setWgRaw(w.getString("raw"));
+    }
+
+    private JSONObject awgToJson() throws JSONException {
+        JSONObject a = new JSONObject();
+        a.put("raw", getAwgRaw());
+        return a;
+    }
+
+    private void applyAwg(JSONObject a) throws JSONException {
+        if (a.has("raw")) setAwgRaw(a.getString("raw"));
     }
 }

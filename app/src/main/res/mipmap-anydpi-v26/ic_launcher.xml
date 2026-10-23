@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Адаптивная иконка (Android 8+): форма задаёт лаунчер.
+     Фон = белый кант исходной картинки (#FEFEFE), передний план = сама
+     картинка на весь видимый квадрат (72dp из 108dp). Квадратный лаунчер
+     видит полный квадрат, круглый — круг, заполненный картинкой. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_fg" />
+</adaptive-icon>

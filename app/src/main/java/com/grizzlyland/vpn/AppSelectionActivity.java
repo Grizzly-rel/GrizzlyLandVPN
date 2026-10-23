@@ -10,9 +10,11 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.Switch;
 import android.widget.TextView;
 
 import java.text.Collator;
@@ -40,6 +42,7 @@ public class AppSelectionActivity extends Activity {
     private ConfigManager config;
     private AppAdapter adapter;
     private ListView list;
+    private TextView hint;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,6 +60,29 @@ public class AppSelectionActivity extends Activity {
         title.setGravity(Gravity.CENTER);
         root.addView(title);
 
+        // Явный режим «VPN для всего телефона»: туннель без allowed-фильтра,
+        // per-app список не действует (серый и некликабельный).
+        Switch allAppsSwitch = new Switch(this);
+        allAppsSwitch.setText("VPN для всего телефона");
+        allAppsSwitch.setTextSize(16);
+        allAppsSwitch.setPadding(0, 20, 0, 4);
+        allAppsSwitch.setChecked(config.getVpnAllApps());
+        allAppsSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                config.setVpnAllApps(isChecked);
+                updateListEnabled();
+                // Пересоздаём туннель с новым фильтром (реконнект, если подключён).
+                GrizzlyLandVpnService.requestApply(AppSelectionActivity.this);
+            }
+        });
+        root.addView(allAppsSwitch);
+
+        hint = new TextView(this);
+        hint.setTextSize(13);
+        hint.setPadding(0, 0, 0, 8);
+        root.addView(hint);
+
         list = new ListView(this);
         adapter = new AppAdapter();
         list.setAdapter(adapter);
@@ -65,6 +91,17 @@ public class AppSelectionActivity extends Activity {
 
         setContentView(root);
         loadApps();
+        updateListEnabled();
+    }
+
+    /** Серый/некликабельный список в режиме «VPN для всего телефона». */
+    private void updateListEnabled() {
+        boolean all = config.getVpnAllApps();
+        hint.setText(all
+                ? "Через VPN идут ВСЕ приложения, список ниже не действует."
+                : "Отметьте приложения, которые пойдут через VPN (пустой список = все приложения).");
+        list.setAlpha(all ? 0.35f : 1f);
+        adapter.notifyDataSetChanged();
     }
 
     private void loadApps() {
@@ -147,6 +184,8 @@ public class AppSelectionActivity extends Activity {
             ((TextView) row.findViewById(101)).setText(info.label);
             CheckBox cb = (CheckBox) row.findViewById(102);
             cb.setChecked(selected.contains(info.pkg));
+            // В режиме «VPN для всего телефона» список некликабельный.
+            cb.setEnabled(!config.getVpnAllApps());
             cb.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {

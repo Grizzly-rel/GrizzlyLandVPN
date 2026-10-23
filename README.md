@@ -1,16 +1,17 @@
 # GrizzlyLandVPN
 
 An Android VPN client that combines **Xray (VLESS/Reality)** and **OpenVPN** in one app,
-with six connection modes, per-app split tunneling and a compact dependency set.
-Min SDK 24 (Android 7.0+), arm64-v8a.
+with seven connection modes, per-app split tunneling and a compact dependency set.
+Runs on **Android 7.0 (API 24) through Android 15 (API 35)** (minSdk 24, targetSdk 34,
+arm64-v8a).
 
 ## Modes
 
-1. **Xray only** — VLESS/Reality via `libxray` (gomobile), TUN fd is passed to the
+1. **Xray** — VLESS/Reality via `libxray` (gomobile), TUN fd is passed to the
    core through the `xray.tun.fd` environment variable (no root, no vpnservice-xray hacks).
-2. **OpenVPN only** — native `libopenvpn` built with `TARGET_ANDROID`; the TUN fd is
+2. **OpenVPN** — native `libopenvpn` built with `TARGET_ANDROID`; the TUN fd is
    handed over through the management interface (`OPENTUN` + `SCM_RIGHTS`).
-3. **Xray + OpenVPN (nested)** — the OpenVPN tunnel is carried through the local
+3. **OpenVPN through Xray** — the OpenVPN tunnel is carried through the local
    Xray SOCKS proxy (`socks-proxy`), useful when the OpenVPN endpoint is only
    reachable through VLESS/Reality.
 4. **OpenVPN over SSH** — an SSH session (JSch, bundled jar) with a local TCP
@@ -34,6 +35,12 @@ Min SDK 24 (Android 7.0+), arm64-v8a.
    before the tunnel starts — the core's own DNS would route through the
    not-yet-created WG tunnel (chicken-and-egg); `Endpoint = host port`
    (space-separated) is normalized to `host:port` on import.
+7. **AmneziaWG** — the same userspace engine as mode 5, but with the AmneziaWG
+   obfuscation layer (junk packets `Jc/Jmin/Jmax/S1/S2`, header protection
+   `H1..H4`) to slip past WireGuard-targeting DPI. Accepts standard AmneziaWG
+   `.conf` files (import/export/QR, key pair generation built in). If the config
+   omits obfuscation parameters, the client applies the AmneziaWG defaults
+   (Jc=4, Jmin=40, Jmax=70, S1=15, S2=68, H1..H4=1..4) and shows them in the UI.
 
 Additional features:
 
@@ -41,7 +48,12 @@ Additional features:
   VpnService TUN by an in-app IP↔Ethernet converter (ARP responder included).
   The server mode is taken from the `dev` directive of the OpenVPN config itself.
 - **Per-app split tunneling** — pick which apps go through the tunnel (same UX as
-  OpenVPN for Android).
+  OpenVPN for Android), or a single switch to route the whole phone.
+- **State restore** — the app remembers whether the VPN was connected (and in which
+  mode) and brings the tunnel back after a phone reboot, an app crash, an app
+  restart or an app reinstall/update. A manual disconnect disables the auto-restore.
+- **WG/AWG config QR codes** — scan a config QR with the camera or show the current
+  config as a QR (WireGuard-style).
 - **Settings export/import** — full JSON export/import of every setting, including
   the SSH section (SAF file picker or `adb` intent).
 - **SSH host key pinning** — TOFU with SHA-256 fingerprint display and a hard stop
@@ -76,7 +88,7 @@ Three binaries are committed so the project builds out of the box. Their origin:
 
 | File | What it is | Origin |
 |------|-----------|--------|
-| `app/libs/libxray.aar` | gomobile binding of Xray-core exposing `SetTunFd` / `Run` / `Stop` / `Version` | Built with `gomobile bind` from the wrapper committed under [`native/libxray/`](native/libxray) against **pristine upstream Xray-core pinned at commit `7da5dae`** — git submodule [`native/xray-core`](native/xray-core), see below |
+| `app/libs/libxray.aar` | gomobile binding of Xray-core exposing `SetTunFd` / `Run` / `Stop` / `Version` | Built with `gomobile bind` from the wrapper committed under [`native/libxray/`](native/libxray) against **upstream Xray-core pinned at commit `7da5dae` plus one local patch** — git submodule [`native/xray-core`](native/xray-core), see below |
 | `app/src/main/jniLibs/arm64-v8a/libopenvpn.so` | OpenVPN **2.6.14** for Android (`TARGET_ANDROID`), built without LZO/LZ4 | Built from the upstream OpenVPN sources; receives the TUN fd through the management interface (`OPENTUN` + `SCM_RIGHTS`) |
 | `app/libs/jsch-2.28.0.jar` | JSch SSH client (mwiede fork) | Unmodified Maven Central artifact `com.github.mwiede:jsch:2.28.0` (SHA-1 verified against Maven Central) |
 
@@ -88,8 +100,13 @@ Notes on `libxray.aar`:
   [`native/libxray/libxray.go`](native/libxray/libxray.go). It passes the Android
   TUN file descriptor to the Xray core through the `xray.tun.fd` environment
   variable and starts/stops the core with a JSON config — nothing else.
-- It links against **upstream Xray-core pinned at commit `7da5dae`** — no local
-  patches. At that commit Xray-core itself ships the TUN inbound on the gVisor
+- It links against **upstream Xray-core pinned at commit `7da5dae` with exactly
+  one local patch** (`native/patches/0001-xray-core-nettun-close-idempotent.patch`):
+  `proxy/wireguard/netstack.go` `netTun.Close()` is made idempotent (`sync.Once`) —
+  upstream's double-`close(chan)` panicked the whole app process when the WG
+  engine degraded in mode 6. The submodule pointer in this repository refers to
+  that upstream commit; apply the patch after `submodule update --init` (below).
+  At that commit Xray-core itself ships the TUN inbound on the gVisor
   stack (`proxy/tun/stack_gvisor.go`), fullcone UDP handling
   (`proxy/tun/udp_fullcone.go`) and reads the TUN fd from the `xray.tun.fd`
   environment variable (`common/platform/platform.go`). Upstream `main` has
@@ -102,6 +119,7 @@ Reproducing `libxray.aar`:
 git clone https://github.com/Grizzly-rel/GrizzlyLandVPN.git
 cd GrizzlyLandVPN
 git submodule update --init   # checks out native/xray-core @ 7da5dae
+git -C native/xray-core am ../../native/patches/0001-xray-core-nettun-close-idempotent.patch
 cd native/libxray             # go.mod already points at ../xray-core
 # -checklinkname=0 is required: github.com/wlynxg/anet (a dependency of the
 # tun proxy) uses go:linkname into the net package, which the linker refuses

@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.graphics.Matrix;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
@@ -64,6 +65,10 @@ public class QrScanActivity extends Activity {
     private String cameraId;
     private CameraDevice cameraDevice;
     private CameraCaptureSession session;
+    /** Выбранный размер потока (общий для превью и анализа, ландшафтный). */
+    private android.util.Size analysisSize;
+    /** Ориентация сенсора (90/270): задаёт направление поворота превью. */
+    private int sensorOrientation = 90;
     /** Билдер повторяющегося запроса (для переключения фонарика на лету). */
     private CaptureRequest.Builder previewRequest;
     private ImageReader reader;
@@ -224,8 +229,14 @@ public class QrScanActivity extends Activity {
             }
             android.util.Size analysisSize = pickAnalysisSize(
                     map.getOutputSizes(ImageFormat_YUV()));
+            this.analysisSize = analysisSize;
+            Integer so = cc.get(CameraCharacteristics.SENSOR_ORIENTATION);
+            if (so != null) {
+                sensorOrientation = so;
+            }
             LogStore.add("QR", "камера " + cameraId + ", кадр анализа "
-                    + analysisSize.getWidth() + "x" + analysisSize.getHeight());
+                    + analysisSize.getWidth() + "x" + analysisSize.getHeight()
+                    + ", сенсор " + sensorOrientation + "°");
             // Размер превью из SurfaceTexture берём тот же (упрощает сессию).
             cameraThread = new HandlerThread("qr-cam");
             cameraThread.start();
@@ -306,23 +317,29 @@ public class QrScanActivity extends Activity {
         return best;
     }
 
-    /** Вписывает превью 4:3 в кадр activity (без растяжения). */
+    /**
+     * Вписывает поток камеры в экран без растяжения: cover-масштаб + поворот
+     * сенсора (буфер кадра ландшафтный, окно портретное). Размеры берутся из
+     * реального analysisSize (общего для превью и анализа), а не хардкод 3:4.
+     */
     private void fitPreviewToFrame(int frameW, int frameH) {
-        if (frameW == 0 || frameH == 0) {
-            return;
+        if (frameW == 0 || frameH == 0 || analysisSize == null) {
+            return; // до открытия камеры вьюха остаётся на весь экран
         }
-        float frameAspect = (float) frameW / frameH;
-        float camAspect = 3f / 4f; // сенсор ландшафтный 4:3, экран портретный
-        int w, h;
-        if (frameAspect > camAspect) {
-            h = frameH;
-            w = (int) (frameH * camAspect);
-        } else {
-            w = frameW;
-            h = (int) (frameW / camAspect);
-        }
+        int pw = analysisSize.getWidth();   // ландшафтный буфер, напр. 1280x720
+        int ph = analysisSize.getHeight();
+        // Повёрнутый на 90° кадр занимает ph x pw (портрет); cover — без полей.
+        float scale = Math.max(frameW / (float) ph, frameH / (float) pw);
+        int w = Math.round(ph * scale);
+        int h = Math.round(pw * scale);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(w, h, Gravity.CENTER);
         textureView.setLayoutParams(lp);
+        // Контент: буфер pw x ph масштабируем в h x w (аспект сохранён), затем
+        // поворот на 90° вокруг центра — портретная ориентация превью.
+        Matrix m = new Matrix();
+        m.postScale(h / (float) pw, w / (float) ph);
+        m.postRotate(sensorOrientation == 270 ? -90f : 90f, w / 2f, h / 2f);
+        textureView.setTransform(m);
     }
 
     @SuppressLint("MissingPermission")
@@ -332,6 +349,14 @@ public class QrScanActivity extends Activity {
             if (st == null || cameraDevice == null) {
                 return;
             }
+            // Без этого буфер SurfaceTexture остаётся размером вьюхи, и камера
+            // растягивает сенсорный кадр в него — превью «вытянутое».
+            if (analysisSize != null) {
+                st.setDefaultBufferSize(analysisSize.getWidth(), analysisSize.getHeight());
+            }
+            // Геометрия превью считается по фактическому размеру потока.
+            runOnUiThread(() -> fitPreviewToFrame(
+                    textureView.getWidth(), textureView.getHeight()));
             Surface preview = new Surface(st);
             List<Surface> targets = new ArrayList<>();
             targets.add(preview);

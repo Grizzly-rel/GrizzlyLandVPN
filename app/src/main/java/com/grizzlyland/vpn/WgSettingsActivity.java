@@ -172,10 +172,25 @@ public class WgSettingsActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+        if (resultCode != RESULT_OK || data == null) {
+            return;
+        }
+        // Результат QR-сканера не имеет URI — только extra "text". Проверяем его
+        // ДО общего требования data.getData(): иначе условие data.getData()==null
+        // молча отбрасывало распознанный QR и конфиг никогда не применялся.
+        if (requestCode == REQ_QR_SCAN) {
+            String text = data.getStringExtra("text");
+            if (text == null || text.trim().isEmpty()) {
+                Toast.makeText(this, "QR отсканирован, но текст пуст", Toast.LENGTH_LONG).show();
+                return;
+            }
+            applyImportedConfig(text, "Конфиг импортирован из QR");
             return;
         }
         Uri uri = data.getData();
+        if (uri == null) {
+            return;
+        }
         if (requestCode == REQ_EXPORT) {
             try (OutputStream os = getContentResolver().openOutputStream(uri)) {
                 // Экспортируем то, что видно в поле (если пусто — сохранённый конфиг).
@@ -201,13 +216,6 @@ public class WgSettingsActivity extends Activity {
                 Toast.makeText(this, "Ошибка импорта: " + e.getMessage(),
                         Toast.LENGTH_LONG).show();
             }
-        } else if (requestCode == REQ_QR_SCAN) {
-            String text = data.getStringExtra("text");
-            if (text == null || text.trim().isEmpty()) {
-                Toast.makeText(this, "QR отсканирован, но текст пуст", Toast.LENGTH_LONG).show();
-                return;
-            }
-            applyImportedConfig(text, "Конфиг импортирован из QR");
         }
     }
 

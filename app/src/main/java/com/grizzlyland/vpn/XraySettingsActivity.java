@@ -147,10 +147,10 @@ public class XraySettingsActivity extends Activity {
         // Уровень журнала Xray управляется кнопкой «Подробный журнал» на экране
         // журнала (info ↔ debug, перезапуск ядра на лету) — спиннер убран.
 
-        // --- Custom JSON (необязательно; используется в режиме "Только Xray") ---
+        // --- Custom JSON (необязательно; используется в режиме "Xray") ---
         TextView customLabel = new TextView(this);
         customLabel.setText("Custom JSON-конфиг Xray (необязательно).\n"
-                + "Если заполнен — режим «Только Xray» использует его как есть "
+                + "Если заполнен — режим «Xray» использует его как есть "
                 + "(inbounds подменяются на tun-вход). Нужен блок outbounds.\n"
                 + "Можно импортировать кнопкой «Импорт Xray» выше.");
         customLabel.setTextSize(14);

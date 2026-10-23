@@ -51,12 +51,13 @@ public class SettingsActivity extends Activity {
         root.addView(modeLabel);
 
         modeGroup = new RadioGroup(this);
-        addMode(modeGroup, "Только Xray", ConfigManager.MODE_XRAY);
-        addMode(modeGroup, "Только OpenVPN (с шифрованием)", ConfigManager.MODE_OPENVPN);
-        addMode(modeGroup, "Xray + OpenVPN (без шифрования)", ConfigManager.MODE_XRAY_OVPN);
+        addMode(modeGroup, "Xray", ConfigManager.MODE_XRAY);
+        addMode(modeGroup, "OpenVPN", ConfigManager.MODE_OPENVPN);
+        addMode(modeGroup, "OpenVPN через Xray", ConfigManager.MODE_XRAY_OVPN);
         addMode(modeGroup, "OpenVPN через SSH", ConfigManager.MODE_OVPN_SSH);
         addMode(modeGroup, "WireGuard", ConfigManager.MODE_WG);
         addMode(modeGroup, "WireGuard через Xray", ConfigManager.MODE_WG_XRAY);
+        addMode(modeGroup, "AmneziaWG", ConfigManager.MODE_AWG);
         selectMode(config.getMode());
         // Самосохранение: клик по радиокнопке сразу применяет режим (реконнект,
         // если VPN подключён). Отдельная кнопка «Сохранить режим» излишня.
@@ -121,6 +122,16 @@ public class SettingsActivity extends Activity {
             }
         });
         root.addView(wg, lp());
+
+        Button awg = new Button(this);
+        awg.setText("Настройки AmneziaWG");
+        awg.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(SettingsActivity.this, AwgSettingsActivity.class));
+            }
+        });
+        root.addView(awg, lp());
 
         Button exportAll = new Button(this);
         exportAll.setText("Экспорт всех настроек");

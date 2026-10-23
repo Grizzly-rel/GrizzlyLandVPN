@@ -41,6 +41,11 @@ public class GrizzlyLandVpnService extends VpnService {
     /** Последняя ошибка подключения (показывается в UI). */
     public static volatile String lastError = "";
 
+    /** Жив ли сервис сейчас (true от onCreate до onDestroy). MainActivity по нему
+     *  и connected решает, нужно ли восстанавливать VPN при открытии приложения.
+     *  При смерти процесса статик сбрасывается в false вместе с процессом. */
+    public static volatile boolean serviceActive = false;
+
     private ParcelFileDescriptor vpnInterface;
     private ConfigManager config;
     private XrayRunner xrayRunner = new XrayRunner();
@@ -49,6 +54,8 @@ public class GrizzlyLandVpnService extends VpnService {
     private SshTunnel sshTunnel;
     /** WireGuard-движок для режима wireguard (живёт, пока работает VPN в этом режиме). */
     private WgRunner wgRunner;
+    /** AmneziaWG-движок для режима amneziawg (живёт, пока работает VPN в этом режиме). */
+    private AwgRunner awgRunner;
     /** Сетевой колбэк режима WireGuard: при смене сети пересоздаём туннель
      *  (UDP-сокеты движка перепривязываются). */
     private android.net.ConnectivityManager.NetworkCallback wgNetCallback;
@@ -68,7 +75,7 @@ public class GrizzlyLandVpnService extends VpnService {
             if (startEpoch.get() != wgRetryEpoch) {
                 return; // отменено: disconnect или пользовательский connect
             }
-            if (!connected && wgRunner == null) {
+            if (!connected && wgRunner == null && awgRunner == null) {
                 connect();
             }
         }
@@ -88,20 +95,142 @@ public class GrizzlyLandVpnService extends VpnService {
         mainHandler.postDelayed(wgRetryRunnable, delay);
     }
 
+    /** Ретраи неудачного establish() («VpnService не разрешил TUN»). Типичный
+     *  случай — автоподключение при загрузке телефона: BOOT_COMPLETED приходит
+     *  ДО первой разблокировки экрана, и система в этот момент не выдаёт
+     *  TUN-интерфейс (проверено 23.10: establish()=null сразу после boot).
+     *  Ретраим с бэкоффом 5..60с ограниченное число раз — после разблокировки
+     *  establish проходит и VPN поднимается сам. Останавливается disconnect'ом
+     *  (эпоха-гвард) и при исчерпании попыток. */
+    private int tunRetryAttempts = 0;
+    private int tunRetryEpoch = -1;
+    private static final int TUN_RETRY_MAX = 30;
+
+    private final Runnable tunRetryRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (startEpoch.get() != tunRetryEpoch) {
+                return; // отменено: disconnect или новый connect
+            }
+            if (connected || vpnInterface != null) {
+                return; // пока ждали — уже подключилось
+            }
+            // Подчистить возможные остатки движков (SOCKS/SSH/openvpn могли
+            // частично стартовать до неудачного establish) и пробовать заново.
+            xrayRunner.stop();
+            openVpnRunner.stop();
+            stopSshTunnel();
+            stopWgEngine();
+            connect();
+        }
+    };
+
+    private void scheduleTunRetry(String modeTag) {
+        tunRetryEpoch = startEpoch.get();
+        tunRetryAttempts++;
+        long delay = Math.min(5000L * tunRetryAttempts, 60000L);
+        LogStore.add("Service", "VpnService не дал TUN (" + modeTag + ") — повтор через "
+                + (delay / 1000) + " с (при загрузке телефона: ждём разблокировки экрана)");
+        updateNotification("Подключение…");
+        mainHandler.removeCallbacks(tunRetryRunnable);
+        mainHandler.postDelayed(tunRetryRunnable, delay);
+    }
+
+    /** Неудачный establish() во всех режимах: если VPN должен быть подключён
+     *  (автоподключение при загрузке/падении/перезапуске) — ретраи; иначе
+     *  (ручной запуск, согласие не выдано) — как раньше, фатально. */
+    private void handleTunFailure(String modeTag) {
+        LogStore.add("Service", "ОШИБКА: VpnService не разрешил TUN (" + modeTag + ")");
+        lastError = "VpnService не разрешил TUN";
+        broadcastState();
+        if (config.getWantConnected() && tunRetryAttempts < TUN_RETRY_MAX) {
+            scheduleTunRetry(modeTag);
+        } else {
+            stopSelf();
+        }
+    }
+
     private final java.util.concurrent.atomic.AtomicInteger startEpoch =
             new java.util.concurrent.atomic.AtomicInteger(0);
+
+    /** Флаг «обработчик падений уже установлен» (по одному на процесс). */
+    private static boolean crashHandlerInstalled = false;
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        serviceActive = true;
+        installCrashRestart();
+    }
+
+    /** При падении процесса (неперехваченное исключение в любом потоке) система
+     *  НЕ перезапускает sticky-сервисы упавшего приложения (проверено: AMS
+     *  «restarting=false»). Ставим одноразовую будильнику через ~3с — она
+     *  переживает смерть процесса и будит BootReceiver, который стартует сервис,
+     *  если пользователь хотел подключённый VPN. Нативные падения (SIGABRT в
+     *  движках) не ловятся — там Java-стек не выполняется. */
+    private void installCrashRestart() {
+        if (crashHandlerInstalled) {
+            return;
+        }
+        crashHandlerInstalled = true;
+        final android.content.Context ctx = getApplicationContext();
+        final Thread.UncaughtExceptionHandler prev = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            try {
+                if (new ConfigManager(ctx).getWantConnected()) {
+                    android.app.AlarmManager am =
+                            (android.app.AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+                    android.app.PendingIntent pi = android.app.PendingIntent.getBroadcast(ctx, 1001,
+                            new Intent(ctx, BootReceiver.class).setAction(BootReceiver.ACTION_ALARM_RESTART),
+                            android.app.PendingIntent.FLAG_UPDATE_CURRENT
+                                    | android.app.PendingIntent.FLAG_IMMUTABLE);
+                    // setAndAllowWhileIdle: без SCHEDULE_EXACT_ALARM (targetSdk 34),
+                    // будит из doze; на интерактивном устройстве срабатывает за секунды.
+                    am.setAndAllowWhileIdle(android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                            android.os.SystemClock.elapsedRealtime() + 3000, pi);
+                    android.util.Log.w("GrizzlyLog", "Падение процесса — будильник перезапуска VPN через ~3с");
+                }
+            } catch (Throwable ignored) {
+            }
+            if (prev != null) {
+                prev.uncaughtException(t, e);
+            }
+        });
+    }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         config = new ConfigManager(this);
         String action = intent != null ? intent.getAction() : null;
         if (ACTION_DISCONNECT.equals(action)) {
+            // Явное отключение пользователем — автоподключение при загрузке/падении выключаем.
+            config.setWantConnected(false);
+            LogStore.add("Service", "Отключение пользователем — восстановление при загрузке/падении выключено");
             disconnect();
             return START_NOT_STICKY;
         }
-        startForeground(NOTIF_ID, buildNotification());
+        // Явный тип FGS на 29+ (на Android 14+ тип обязателен; на 26-28 обычный
+        // вызов — перегрузки с типом не существует, а 24-25 не знают про FGS вовсе).
+        if (Build.VERSION.SDK_INT >= 29) {
+            startForeground(NOTIF_ID, buildNotification(),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
+        } else {
+            startForeground(NOTIF_ID, buildNotification());
+        }
+        // Рестарт сервиса системой после падения процесса (START_STICKY, intent==null):
+        // подключаем только если пользователь не отключал VPN сам.
+        if (intent == null && !config.getWantConnected()) {
+            LogStore.add("Service", "Рестарт после падения: VPN до падения не работал — не подключаю");
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+        // Подключение (пользователь, BootReceiver, смена сети, рестарт после падения) —
+        // запоминаем «хотел подключён» для восстановления при перезагрузке/падении.
+        config.setWantConnected(true);
         // Явный интент (пользователь или смена сети) — новая попытка с нуля.
         wgRetryAttempts = 0;
+        tunRetryAttempts = 0;
         if (ACTION_SET_DEBUG.equals(action)) {
             // Живое применение «Подробного журнала» — реконнект НЕ делаем.
             applyLogFlagLive();
@@ -170,6 +299,11 @@ public class GrizzlyLandVpnService extends VpnService {
             LogStore.add("Service", verbose
                     ? "WireGuard: подробные строки движка показаны (фильтр снят)"
                     : "WireGuard: подробные строки движка скрыты");
+        }
+        if (awgRunner != null && awgRunner.isRunning()) {
+            LogStore.add("Service", verbose
+                    ? "AmneziaWG: подробные строки движка показаны (фильтр снят)"
+                    : "AmneziaWG: подробные строки движка скрыты");
         }
     }
 
@@ -241,6 +375,10 @@ public class GrizzlyLandVpnService extends VpnService {
             } else if (ConfigManager.MODE_WG.equals(mode)) {
                 // Режим WireGuard: TUN создаём сами и отдаём fd движку wireguard-go.
                 startWgMode();
+            } else if (ConfigManager.MODE_AWG.equals(mode)) {
+                // Режим AmneziaWG: TUN создаём сами и отдаём fd движку amneziawg-go
+                // (UAPI-конфиг с параметрами обфускации от AwgConfigParser).
+                startAwgMode();
             } else if (ConfigManager.MODE_WG_XRAY.equals(mode)) {
                 // WireGuard через Xray: TUN как в режиме "только Xray", но дефолтный
                 // outbound Xray — wireguard, чей UDP завёрнут в VLESS (dialerProxy).
@@ -263,7 +401,9 @@ public class GrizzlyLandVpnService extends VpnService {
                         // ставился до startTun: при падении Xray UI показывал «подключено»
                         // при мёртвом туннеле.
                         connected = true;
+                        tunRetryAttempts = 0;
                         broadcastState();
+                        updateNotification("VPN активен");
                     } catch (Exception e) {
                         Log.e(TAG, "Xray TUN start failed", e);
                         LogStore.add("Service", "ОШИБКА запуска Xray TUN: " + e);
@@ -279,9 +419,7 @@ public class GrizzlyLandVpnService extends VpnService {
                         return;
                     }
                 } else {
-                    LogStore.add("Service", "ОШИБКА: VpnService не разрешил TUN");
-                    lastError = "VpnService не разрешил TUN";
-                    broadcastState();
+                    handleTunFailure("Xray");
                 }
             }
         } catch (Exception e) {
@@ -404,10 +542,7 @@ public class GrizzlyLandVpnService extends VpnService {
                 + " mtu=" + (cfg.mtu > 0 ? cfg.mtu : 1420));
         vpnInterface = buildBuilderForWg(cfg).establish();
         if (vpnInterface == null) {
-            LogStore.add("Service", "ОШИБКА: VpnService не разрешил TUN (WG)");
-            lastError = "VpnService не разрешил TUN";
-            broadcastState();
-            stopSelf();
+            handleTunFailure("WG");
             return;
         }
         // Владение fd переходит движку: detach, чтобы close() обёртки в
@@ -418,8 +553,10 @@ public class GrizzlyLandVpnService extends VpnService {
             @Override
             public void onUp() {
                 wgRetryAttempts = 0;
+                tunRetryAttempts = 0;
                 connected = true;
                 broadcastState();
+                updateNotification("VPN активен");
                 LogStore.add("Service", "WireGuard: туннель поднят");
                 registerWgNetworkCallback();
             }
@@ -446,13 +583,83 @@ public class GrizzlyLandVpnService extends VpnService {
         wgRunner.start(tunFd, cfg.ipc);
     }
 
-    /** Останавливает WG-движок, сетевой колбэк и (если жив) TUN-обёртку. */
+    /**
+     * Режим AmneziaWG: всё то же, что startWgMode, но движок — amneziawg-go,
+     * конфиг парсит AwgConfigParser (добавляя UAPI-параметры обфускации
+     * jc/jmin/jmax/s1/s2/h1..h4), TUN-билдер общий с WireGuard.
+     * Ретраи при транзиентном «резолв endpoint'а» — тот же супервизор,
+     * что у WG (scheduleWgRetry).
+     */
+    private void startAwgMode() {
+        AwgConfigParser.AwgConfig cfg = AwgConfigParser.parse(config.getAwgRaw());
+        if (!cfg.valid) {
+            lastError = "AWG: конфиг некорректен"
+                    + (cfg.parseError.isEmpty() ? "" : (": " + cfg.parseError))
+                    + " (Настройки → Настройки AmneziaWG)";
+            LogStore.add("Service", "ОШИБКА: " + lastError);
+            broadcastState();
+            stopSelf();
+            return;
+        }
+        LogStore.add("Service", "AWG-конфиг: адресов=" + cfg.addresses.size()
+                + " peer=" + cfg.peers + " endpoint=" + cfg.endpointForLog
+                + " mtu=" + (cfg.mtu > 0 ? cfg.mtu : 1420)
+                + " обфускация jc=" + cfg.jc + " jmin=" + cfg.jmin + " jmax=" + cfg.jmax
+                + " s1=" + cfg.s1 + " s2=" + cfg.s2
+                + " h1=" + cfg.h1 + " h2=" + cfg.h2 + " h3=" + cfg.h3 + " h4=" + cfg.h4);
+        vpnInterface = buildBuilderForAwg(cfg).establish();
+        if (vpnInterface == null) {
+            handleTunFailure("AWG");
+            return;
+        }
+        // Владение fd переходит движку: detach, чтобы close() обёртки в
+        // disconnect() не закрыл fd, которым владеет amneziawg-go.
+        final int tunFd = vpnInterface.detachFd();
+        stopWgEngine();
+        awgRunner = new AwgRunner(this::protectFd, config::getLogDebug, new AwgRunner.Listener() {
+            @Override
+            public void onUp() {
+                wgRetryAttempts = 0;
+                tunRetryAttempts = 0;
+                connected = true;
+                broadcastState();
+                updateNotification("VPN активен");
+                LogStore.add("Service", "AmneziaWG: туннель поднят");
+                registerWgNetworkCallback();
+            }
+
+            @Override
+            public void onError(String message) {
+                LogStore.add("Service", "ОШИБКА AWG: " + message);
+                lastError = message;
+                connected = false;
+                broadcastState();
+                stopWgEngine();
+                // Резолв endpoint'а — транзиентная ошибка (сеть пропала или ещё
+                // не поднялась): не гасим VPN, ретраим с бэкоффом — как у WG.
+                // Прочие ошибки (битый конфиг, TUN, параметры обфускации) — фатальны.
+                if (message != null && message.startsWith("резолв")) {
+                    scheduleWgRetry("сеть недоступна (резолв endpoint'а)");
+                } else {
+                    stopSelf();
+                }
+            }
+        });
+        awgRunner.start(tunFd, cfg.ipc);
+    }
+
+    /** Останавливает WG/AWG-движок, сетевой колбэк и (если жив) TUN-обёртку. */
     private void stopWgEngine() {
         unregisterWgNetworkCallback();
         WgRunner r = wgRunner;
         wgRunner = null;
         if (r != null) {
             r.stop();
+        }
+        AwgRunner a = awgRunner;
+        awgRunner = null;
+        if (a != null) {
+            a.stop();
         }
         if (vpnInterface != null) {
             try {
@@ -505,11 +712,9 @@ public class GrizzlyLandVpnService extends VpnService {
                 }
                 ParcelFileDescriptor tun = buildBuilder(null, 1400, null, null).establish();
                 if (tun == null) {
-                    LogStore.add("Service", "ОШИБКА: VpnService не разрешил TUN (WG через Xray)");
-                    lastError = "VpnService не разрешил TUN";
                     connected = false;
                     broadcastState();
-                    stopSelf();
+                    handleTunFailure("WG через Xray");
                     return;
                 }
                 holder[0] = tun;
@@ -525,7 +730,9 @@ public class GrizzlyLandVpnService extends VpnService {
                 String logDir = getFilesDir().getAbsolutePath();
                 xrayRunner.startTunWg(config, tun.getFd(), logDir);
                 connected = true;
+                tunRetryAttempts = 0;
                 broadcastState();
+                updateNotification("VPN активен");
                 // UDP-сокет WG живёт внутри Xray: при смене сети пересоздаём туннель
                 // целиком (тот же NetworkCallback, что у режима WireGuard).
                 registerWgNetworkCallback();
@@ -556,17 +763,77 @@ public class GrizzlyLandVpnService extends VpnService {
     }
 
     /**
+     * Per-app фильтр TUN-интерфейса, общий для всех режимов.
+     * «VPN для всего телефона» (vpnAllApps) — без allowed-фильтра, только
+     * исключение собственного пакета (иначе соединение движка с сервером
+     * зациклится через собственный туннель). Иначе: allowedApps непусто →
+     * только выбранные приложения (свой пакет в список не входит и так
+     * отсечён; смешивание addAllowedApplication и addDisallowedApplication
+     * на Android 11+ даёт ошибку «Interface rule must specify interface»);
+     * пусто → весь трафик + исключение своего пакета.
+     */
+    private Builder applyAppFilter(Builder builder) {
+        if (config.getVpnAllApps()) {
+            try {
+                builder.addDisallowedApplication(getPackageName());
+                LogStore.add("Service", "Приложения: весь телефон (переключатель «VPN для всего телефона»)");
+            } catch (Exception e) {
+                Log.e(TAG, "addDisallowedApplication failed for own package", e);
+                LogStore.add("Service", "addDisallowedApplication(own) failed: " + e);
+            }
+            return builder;
+        }
+        for (String pkg : config.getAllowedApps()) {
+            try {
+                builder.addAllowedApplication(pkg);
+            } catch (Exception e) {
+                Log.e(TAG, "addAllowedApplication failed for " + pkg, e);
+                LogStore.add("Service", "addAllowedApplication(" + pkg + ") failed: " + e);
+            }
+        }
+        if (config.getAllowedApps().isEmpty()) {
+            try {
+                builder.addDisallowedApplication(getPackageName());
+                LogStore.add("Service", "Приложения: весь телефон (per-app список пуст)");
+            } catch (Exception e) {
+                Log.e(TAG, "addDisallowedApplication failed for own package", e);
+                LogStore.add("Service", "addDisallowedApplication(own) failed: " + e);
+            }
+        } else {
+            LogStore.add("Service", "Per-app: выбранных приложений: " + config.getAllowedApps().size());
+        }
+        return builder;
+    }
+
+    /**
      * Билдер TUN для WireGuard: адреса и DNS из конфига, маршруты из
      * AllowedIPs (0.0.0.0/0 → весь трафик), per-app фильтрация как везде.
      * Отдельный метод (не общий buildBuilder), чтобы не трогать рабочий код
      * остальных режимов.
      */
     private Builder buildBuilderForWg(WgConfigParser.WgConfig cfg) {
+        return buildBuilderWgStyle(cfg.addresses, cfg.dns, cfg.allowedIps, cfg.mtu);
+    }
+
+    /** Билдер TUN для AmneziaWG — тот же, что для WireGuard. */
+    private Builder buildBuilderForAwg(AwgConfigParser.AwgConfig cfg) {
+        return buildBuilderWgStyle(cfg.addresses, cfg.dns, cfg.allowedIps, cfg.mtu);
+    }
+
+    /**
+     * Билдер TUN для WG/AWG: адреса и DNS из конфига, маршруты из
+     * AllowedIPs (0.0.0.0/0 → весь трафик), per-app фильтрация как везде.
+     * Отдельный метод (не общий buildBuilder), чтобы не трогать рабочий код
+     * остальных режимов.
+     */
+    private Builder buildBuilderWgStyle(java.util.List<String> addresses,
+                                        java.util.List<String> dns,
+                                        java.util.List<String> allowedIps, int mtu) {
         Builder builder = new Builder()
                 .setSession(getString(R.string.app_name))
                 .setBlocking(true)
-                .setMtu(cfg.mtu > 0 ? cfg.mtu : 1420);
-        for (String cidr : cfg.addresses) {
+                .setMtu(mtu > 0 ? mtu : 1420);
+        for (String cidr : addresses) {
             String[] p = cidr.split("/");
             if (p.length < 1 || !isIpv4(p[0])) {
                 continue;
@@ -587,7 +854,7 @@ public class GrizzlyLandVpnService extends VpnService {
                 Log.e(TAG, "WG addAddress failed for " + cidr, e);
             }
         }
-        for (String d : cfg.dns) {
+        for (String d : dns) {
             if (isIpv4(d)) {
                 try {
                     builder.addDnsServer(d);
@@ -598,7 +865,7 @@ public class GrizzlyLandVpnService extends VpnService {
         }
         boolean defaultRoute = false;
         int routesAdded = 0;
-        for (String cidr : cfg.allowedIps) {
+        for (String cidr : allowedIps) {
             String[] p = cidr.split("/");
             if (p.length < 1 || !isIpv4(p[0])) {
                 continue;
@@ -617,7 +884,7 @@ public class GrizzlyLandVpnService extends VpnService {
             try {
                 builder.addRoute(p[0], prefix);
                 routesAdded++;
-                LogStore.add("Service", "WG-маршрут: " + p[0] + "/" + prefix);
+                LogStore.add("Service", "маршрут: " + p[0] + "/" + prefix);
             } catch (Exception e) {
                 Log.e(TAG, "WG addRoute failed for " + cidr, e);
             }
@@ -625,21 +892,7 @@ public class GrizzlyLandVpnService extends VpnService {
         if (defaultRoute || routesAdded == 0) {
             builder.addRoute("0.0.0.0", 0);
         }
-        for (String pkg : config.getAllowedApps()) {
-            try {
-                builder.addAllowedApplication(pkg);
-            } catch (Exception e) {
-                Log.e(TAG, "addAllowedApplication failed for " + pkg, e);
-            }
-        }
-        if (config.getAllowedApps().isEmpty()) {
-            try {
-                builder.addDisallowedApplication(getPackageName());
-            } catch (Exception e) {
-                Log.e(TAG, "addDisallowedApplication failed for own package", e);
-            }
-        }
-        return builder;
+        return applyAppFilter(builder);
     }
 
     /**
@@ -674,7 +927,8 @@ public class GrizzlyLandVpnService extends VpnService {
                     if (wgLastNetwork != null && !network.equals(wgLastNetwork)
                             && connected
                             && (ConfigManager.MODE_WG.equals(config.getMode())
-                                || ConfigManager.MODE_WG_XRAY.equals(config.getMode()))) {
+                                || ConfigManager.MODE_WG_XRAY.equals(config.getMode())
+                                || ConfigManager.MODE_AWG.equals(config.getMode()))) {
                         LogStore.add("Wg", "сменилась сеть — перезапуск WG-туннеля");
                         Intent i = new Intent(GrizzlyLandVpnService.this,
                                 GrizzlyLandVpnService.class);
@@ -740,14 +994,16 @@ public class GrizzlyLandVpnService extends VpnService {
             vpnInterface = buildBuilder(localIp, mtu, pushedDns, pushedRoutes).establish();
             if (vpnInterface != null) {
                 connected = true;
+                tunRetryAttempts = 0;
                 broadcastState();
+                updateNotification("VPN активен");
                 LogStore.add("Service", "TUN создан: ip=" + localIp + " mtu=" + mtu
                         + " (fd=" + tunFdNumber(vpnInterface) + ")"
                         + " pushedDNS=" + (pushedDns == null ? 0 : pushedDns.size())
                         + " pushedRoutes=" + (pushedRoutes == null ? 0 : pushedRoutes.size()));
                 startTunFdMonitor();
             } else {
-                LogStore.add("Service", "ОШИБКА: VpnService не разрешил TUN (ip=" + localIp + ")");
+                handleTunFailure("OpenVPN ip=" + localIp);
             }
         }
         return vpnInterface;
@@ -848,7 +1104,9 @@ public class GrizzlyLandVpnService extends VpnService {
             if (oDns != null && !oDns.trim().isEmpty()) {
                 dnsList = oDns;
             } else if (pushedDns != null && !pushedDns.isEmpty()) {
-                dnsList = String.join(",", pushedDns);
+                // TextUtils.join вместо String.join: тот доступен только с API 26,
+                // а minSdk 24 (Android 7) — на 7/7.1 был бы NoSuchMethodError.
+                dnsList = android.text.TextUtils.join(",", pushedDns);
             }
         }
         // DNS-серверы берутся ТОЛЬКО из настроек/импортированного конфига (без
@@ -892,38 +1150,19 @@ public class GrizzlyLandVpnService extends VpnService {
             builder.addRoute("0.0.0.0", 0);
         }
 
-        // Per-app: маршрутизируем только выбранные приложения.
-        for (String pkg : config.getAllowedApps()) {
-            try {
-                builder.addAllowedApplication(pkg);
-            } catch (Exception e) {
-                Log.e(TAG, "addAllowedApplication failed for " + pkg, e);
-            }
-        }
-
-        // Исключаем собственный пакет из VPN-маршрутизации, чтобы соединение
-        // Xray/OpenVPN с сервером не зацикливалось через собственный туннель.
-        // Нужно ТОЛЬКО в режиме «весь трафик» (allowed-список пуст): при per-app
-        // фильтрации свой пакет и так не входит в allowed, а смешивание
-        // addAllowedApplication и addDisallowedApplication на Android 11+ даёт
-        // ошибку «Interface rule must specify interface».
-        if (config.getAllowedApps().isEmpty()) {
-            try {
-                builder.addDisallowedApplication(getPackageName());
-            } catch (Exception e) {
-                Log.e(TAG, "addDisallowedApplication failed for own package", e);
-                LogStore.add("Service", "addDisallowedApplication(own) failed: " + e);
-            }
-        }
-        return builder;
+        // Per-app: маршрутизируем только выбранные приложения (или весь телефон
+        // при включённом переключателе «VPN для всего телефона»).
+        return applyAppFilter(builder);
     }
 
     private void disconnect() {
         connected = false;
         lastError = "";
-        startEpoch.incrementAndGet(); // отменить асинхронный старт WG-через-Xray и ретраи WG, если в полёте
+        startEpoch.incrementAndGet(); // отменить асинхронный старт WG-через-Xray и ретраи WG/TUN, если в полёте
         mainHandler.removeCallbacks(wgRetryRunnable);
+        mainHandler.removeCallbacks(tunRetryRunnable);
         wgRetryAttempts = 0;
+        tunRetryAttempts = 0;
         broadcastState();
         LogStore.add("Service", "==== Отключение ====");
         stopTunFdMonitor();
@@ -942,8 +1181,22 @@ public class GrizzlyLandVpnService extends VpnService {
         stopSelf();
     }
 
+    /** VPN отозван системой: пользователь выключил в настройках Android либо
+     *  запущен другой VPN. Считаем это явным отключением — автоподключение
+     *  при загрузке/падении выключаем. (Собственные реконнекты сервиса через
+     *  establish() onRevoke не вызывают.) */
+    @Override
+    public void onRevoke() {
+        LogStore.add("Service", "VPN отозван системой (onRevoke) — восстановление при загрузке/падении выключено");
+        if (config != null) {
+            config.setWantConnected(false);
+        }
+        disconnect();
+    }
+
     @Override
     public void onDestroy() {
+        serviceActive = false;
         disconnect();
         super.onDestroy();
     }
@@ -995,7 +1248,20 @@ public class GrizzlyLandVpnService extends VpnService {
         sendBroadcast(i);
     }
 
+    /** Обновить текст существующего уведомления (без пересоздания канала). */
+    private void updateNotification(String text) {
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            nm.notify(NOTIF_ID, buildNotification(text));
+        } catch (Exception ignored) {
+        }
+    }
+
     private Notification buildNotification() {
+        return buildNotification("VPN активен");
+    }
+
+    private Notification buildNotification(String contentText) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             NotificationChannel ch = new NotificationChannel(
@@ -1011,7 +1277,7 @@ public class GrizzlyLandVpnService extends VpnService {
                 ? new Notification.Builder(this, CHANNEL_ID)
                 : new Notification.Builder(this);
         return b.setContentTitle("GrizzlyLandVPN")
-                .setContentText("VPN активен")
+                .setContentText(contentText)
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setOngoing(true)
                 .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Отключить", pi)

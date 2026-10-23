@@ -54,6 +54,16 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Android 13+ (API 33): уведомления скрыты без runtime-разрешения. Без него
+        // юзер не увидит уведомление VPN с кнопкой «Отключить» (сам сервис при этом
+        // работает). Запрашивается один раз; отказ не блокирует работу приложения.
+        if (android.os.Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                        != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                    new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 200);
+        }
+
         // Автоматизация (adb): am start ... --es import_json '{"openvpn":{...}}' —
         // применяет настройки без файлового пикера. Только локальный intent от shell.
         handleImportIntent(getIntent());
@@ -126,6 +136,38 @@ public class MainActivity extends Activity {
 
         setContentView(root);
         refreshStatus();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        autoRestoreIfWanted();
+    }
+
+    /** Восстановление VPN при открытии приложения: если до перезапуска/падения/
+     *  переустановки VPN был подключён (ConfigManager.getWantConnected), а сервис
+     *  сейчас не жив — подключаем тем же режимом и конфигом. После force-stop и
+     *  переустановки приложение находится в stopped-state: система НЕ доставляет
+     *  ему BOOT_COMPLETED и будильники до первого ручного запуска, так что
+     *  открытие приложения — единственный шанс восстановить подключение.
+     *  Если сервис жив (уже подключён или подключается) — не мешаем. */
+    private void autoRestoreIfWanted() {
+        ConfigManager config = new ConfigManager(this);
+        if (!config.getWantConnected()) {
+            return;
+        }
+        if (GrizzlyLandVpnService.connected || GrizzlyLandVpnService.serviceActive) {
+            return;
+        }
+        // Без выданного согласия VpnService автоподключение невозможно
+        // (после полного удаления+установки согласие сбрасывается) — юзер
+        // нажмёт «Подключить» и выдаст его через системный диалог.
+        if (VpnService.prepare(this) != null) {
+            LogStore.add("Main", "VPN был подключён до перезапуска, но согласие на VPN не выдано — автоподключение пропущено");
+            return;
+        }
+        LogStore.add("Main", "VPN был подключён до перезапуска приложения — восстанавливаю (режим " + config.getMode() + ")");
+        startVpn();
     }
 
     @Override
@@ -208,6 +250,10 @@ public class MainActivity extends Activity {
             // Для WireGuard достаточно непустого корректного конфига.
             return WgConfigParser.parse(config.getWgRaw()).valid;
         }
+        if (ConfigManager.MODE_AWG.equals(mode)) {
+            // Для AmneziaWG достаточно непустого корректного конфига.
+            return AwgConfigParser.parse(config.getAwgRaw()).valid;
+        }
         if (ConfigManager.MODE_WG_XRAY.equals(mode)) {
             // WG-конфиг + рабочие настройки Xray (обёртка VLESS).
             return WgConfigParser.parse(config.getWgRaw()).valid && xrayOk;
@@ -238,6 +284,16 @@ public class MainActivity extends Activity {
                 sb.append("\nPeer: ").append(c.peers)
                         .append(", адресов: ").append(c.addresses.size());
             }
+        } else if (ConfigManager.MODE_AWG.equals(mode)) {
+            // В режиме AmneziaWG показываем сводку по awg-конфигу.
+            AwgConfigParser.AwgConfig c = AwgConfigParser.parse(config.getAwgRaw());
+            sb.append("\nAmneziaWG: ").append(c.valid ? "конфиг задан" : "конфиг не задан");
+            if (c.valid) {
+                sb.append("\nEndpoint: ").append(c.endpointForLog.isEmpty() ? "(не задан)" : c.endpointForLog);
+                sb.append("\nPeer: ").append(c.peers)
+                        .append(", адресов: ").append(c.addresses.size());
+                sb.append("\nОбфускация: ").append(AwgConfigParser.obfuscationSummary(c));
+            }
         } else if (ConfigManager.MODE_WG_XRAY.equals(mode)) {
             // WireGuard через Xray: WG-конфиг + Xray-обёртка.
             WgConfigParser.WgConfig c = WgConfigParser.parse(config.getWgRaw());
@@ -256,7 +312,11 @@ public class MainActivity extends Activity {
             sb.append("\nOpenVPN: ").append(config.getOvpnRemoteHost()).append(":")
                     .append(config.getOvpnRemotePort());
         }
-        sb.append("\nВыбрано приложений: ").append(count);
+        if (config.getVpnAllApps()) {
+            sb.append("\nПриложения: весь телефон");
+        } else {
+            sb.append("\nВыбрано приложений: ").append(count);
+        }
         String err = GrizzlyLandVpnService.lastError;
         if (err != null && !err.isEmpty()) {
             sb.append("\n\nОшибка: ").append(err);
@@ -289,10 +349,13 @@ public class MainActivity extends Activity {
         if (ConfigManager.MODE_WG.equals(mode)) {
             return "WireGuard";
         }
+        if (ConfigManager.MODE_AWG.equals(mode)) {
+            return "AmneziaWG";
+        }
         if (ConfigManager.MODE_WG_XRAY.equals(mode)) {
             return "WireGuard через Xray";
         }
-        return "Xray + OpenVPN";
+        return "OpenVPN через Xray";
     }
 
     private LinearLayout.LayoutParams lp() {
