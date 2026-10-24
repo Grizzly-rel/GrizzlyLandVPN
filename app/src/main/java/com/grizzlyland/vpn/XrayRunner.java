@@ -57,7 +57,7 @@ public class XrayRunner {
         LogStore.add("Xray", "Конфиг:\n" + json);
         Libxray.run(json);
         running = true;
-        startLogTailer(logDir);
+        startLogTailer(logDir, config.getLogDebug());
         Log.i(TAG, "Xray TUN started, version=" + Libxray.version());
         LogStore.add("Xray", "Xray TUN запущен, version=" + Libxray.version());
     }
@@ -81,7 +81,7 @@ public class XrayRunner {
         LogStore.add("Xray", "Конфиг:\n" + json);
         Libxray.run(json);
         running = true;
-        startLogTailer(logDir);
+        startLogTailer(logDir, config.getLogDebug());
         Log.i(TAG, "Xray TUN+WG started, version=" + Libxray.version());
         LogStore.add("Xray", "Xray TUN+WG запущен, version=" + Libxray.version());
     }
@@ -147,7 +147,7 @@ public class XrayRunner {
         LogStore.add("Xray", "Конфиг:\n" + json);
         Libxray.run(json);
         running = true;
-        startLogTailer(logDir);
+        startLogTailer(logDir, config.getLogDebug());
         Log.i(TAG, "Xray CUSTOM started, version=" + Libxray.version());
         LogStore.add("Xray", "Xray custom запущен, version=" + Libxray.version());
     }
@@ -164,7 +164,7 @@ public class XrayRunner {
         LogStore.add("Xray", "Конфиг:\n" + json);
         Libxray.run(json);
         running = true;
-        startLogTailer(logDir);
+        startLogTailer(logDir, config.getLogDebug());
         Log.i(TAG, "Xray SOCKS started, version=" + Libxray.version());
         LogStore.add("Xray", "Xray SOCKS запущен, version=" + Libxray.version());
     }
@@ -199,12 +199,14 @@ public class XrayRunner {
 
     /** Подставляет log-настройки (уровень + файлы) в пользовательский custom-конфиг. */
     private static void applyLogConfig(JSONObject o, ConfigManager config, String logDir) throws Exception {
-        // Уровень управляется флагом «Подробный журнал» (см. XrayConfigBuilder.baseConfig).
-        String level = config.getLogDebug() ? "debug" : "info";
+        // Уровень управляется флагом «Подробный журнал» (см. XrayConfigBuilder.baseConfig):
+        // OFF → warning + access: none (беречь flash-память телефона), ON → debug + файл.
+        boolean verbose = config.getLogDebug();
+        String level = verbose ? "debug" : "warning";
         JSONObject log = new JSONObject();
         log.put("loglevel", level);
         if (logDir != null) {
-            log.put("access", logDir + "/xray_access.log");
+            log.put("access", verbose ? logDir + "/xray_access.log" : "none");
             log.put("error", logDir + "/xray_error.log");
         }
         o.put("log", log);
@@ -214,17 +216,21 @@ public class XrayRunner {
     private volatile Thread logTailer;
     private volatile Thread errorTailer;
 
-    private void startLogTailer(String logDir) {
+    private void startLogTailer(String logDir, boolean accessEnabled) {
         stopLogTailer();
         if (logDir == null) {
             return;
         }
         File access = new File(logDir, "xray_access.log");
         File error = new File(logDir, "xray_error.log");
+        // Access-файл существует только при включённом «Подробном журнале»
+        // (иначе в конфиге Xray access: none) — tailer для него не нужен.
+        if (accessEnabled) {
+            logTailer = new Thread(() -> tailLogFile(access, "Xray"), "xray-log-tail");
+            logTailer.setDaemon(true);
+            logTailer.start();
+        }
         // Фикс: читаем и error-лог (раньше ошибки Xray были невидимы).
-        logTailer = new Thread(() -> tailLogFile(access, "Xray"), "xray-log-tail");
-        logTailer.setDaemon(true);
-        logTailer.start();
         errorTailer = new Thread(() -> tailLogFile(error, "XrayErr"), "xray-error-tail");
         errorTailer.setDaemon(true);
         errorTailer.start();
@@ -269,7 +275,9 @@ public class XrayRunner {
                             }
                         }
                     }
-                    Thread.sleep(500);
+                    // Опрос раз в секунду: строки логов не теряются (файл читается
+                    // с последней позиции), CPU просыпается вдвое реже.
+                    Thread.sleep(1000);
                 }
             }
         } catch (InterruptedException ie) {

@@ -91,7 +91,10 @@ public class WgRunner {
             while (engineRunning) {
                 drainLogs();
                 try {
-                    Thread.sleep(500);
+                    // Опрос раз в секунду: буфер движка вмещает 1200 строк
+                    // (переполнение маловероятно), строки не теряются, CPU
+                    // просыпается вдвое реже.
+                    Thread.sleep(1000);
                 } catch (InterruptedException e) {
                     return;
                 }

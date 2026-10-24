@@ -260,15 +260,18 @@ public class XrayConfigBuilder {
     private static JSONObject baseConfig(ConfigManager c, String logDir) throws JSONException {
         JSONObject o = new JSONObject();
 
-        // Уровень журналирования управляется ТОЛЬКО флагом «Подробный журнал»
-        // (кнопка в журнале): info по умолчанию, debug — при включённом флаге.
-        // Смена уровня = перезапуск ядра сервисом (без реконнекта VPN).
-        String level = c.getLogDebug() ? "debug" : "info";
+        // Журналирование управляется ТОЛЬКО флагом «Подробный журнал» (кнопка в
+        // журнале). OFF → warning + access: none: на flash-память телефона пишутся
+        // только ошибки/варнинги — access-строка на каждый коннект убивает ресурс
+        // накопителя. ON → debug + access в файл. Смена флага = перезапуск ядра
+        // сервисом (без реконнекта VPN).
+        boolean verbose = c.getLogDebug();
+        String level = verbose ? "debug" : "warning";
         JSONObject log = new JSONObject();
         log.put("loglevel", level);
-        // Пишем логи Xray в файлы, чтобы приложение могло показать их в журнале.
+        // Файлы логов нужны, чтобы приложение показало их в журнале.
         if (logDir != null) {
-            log.put("access", logDir + "/xray_access.log");
+            log.put("access", verbose ? logDir + "/xray_access.log" : "none");
             log.put("error", logDir + "/xray_error.log");
         }
         o.put("log", log);
