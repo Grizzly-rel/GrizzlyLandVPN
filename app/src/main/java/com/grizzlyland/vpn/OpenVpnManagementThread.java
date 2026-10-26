@@ -145,14 +145,11 @@ public class OpenVpnManagementThread implements Runnable {
                 if (holdEvents.poll(2, java.util.concurrent.TimeUnit.SECONDS) == null) {
                     continue; // таймаут — перепроверяем running
                 }
-                long backoff = (releasesSinceSuccess <= 0)
-                        ? HOLD_MIN_INTERVAL_MS
-                        : Math.min(HOLD_MIN_INTERVAL_MS << Math.min(releasesSinceSuccess - 1, 4),
-                                   HOLD_BACKOFF_MAX_MS);
-                long elapsed = System.currentTimeMillis() - lastHoldReleaseMs;
-                if (elapsed < backoff) {
-                    Thread.sleep(backoff - elapsed);
-                }
+                // Сначала ждём сеть: пока её нет вообще, бэкофф не нужен —
+                // попыток не было, а интернет может вернуться в любую секунду.
+                // Тогда подключение произойдёт через ~2с (гранулярность опроса)
+                // после появления сети, а не через остаток бэкоффа.
+                boolean waitedForNetwork = false;
                 boolean logged = false;
                 while (running && !hasUsableUnderlyingNetwork()) {
                     if (!logged) {
@@ -160,10 +157,23 @@ public class OpenVpnManagementThread implements Runnable {
                                 + " (появится — подключусь сам)");
                         logged = true;
                     }
+                    waitedForNetwork = true;
                     Thread.sleep(2000);
                 }
                 if (!running) {
                     return;
+                }
+                // Сеть была (или есть): сеть с неработающим интернетом штурмовать
+                // нельзя — бэкофф растёт с числом попыток подряд без успеха.
+                if (!waitedForNetwork) {
+                    long backoff = (releasesSinceSuccess <= 0)
+                            ? HOLD_MIN_INTERVAL_MS
+                            : Math.min(HOLD_MIN_INTERVAL_MS << Math.min(releasesSinceSuccess - 1, 4),
+                                       HOLD_BACKOFF_MAX_MS);
+                    long elapsed = System.currentTimeMillis() - lastHoldReleaseMs;
+                    if (elapsed < backoff) {
+                        Thread.sleep(backoff - elapsed);
+                    }
                 }
                 write("hold release\n");
                 lastHoldReleaseMs = System.currentTimeMillis();
