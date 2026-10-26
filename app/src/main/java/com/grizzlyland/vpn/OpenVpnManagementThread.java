@@ -90,6 +90,114 @@ public class OpenVpnManagementThread implements Runnable {
 
     private volatile boolean running = true;
 
+    // ==== Темп реконнектов (>HOLD:) ====
+    // OpenVPN с --management-hold входит в hold на КАЖДОМ внутреннем рестарте
+    // (SIGUSR1), в том числе в цикле «DNS недоступен → рестарт». Мгновенный
+    // 'hold release' на каждый hold разгонял этот цикл до десятков рестартов
+    // в секунду: штурм DNS, флуд журнала, расход батареи (логи 26.10 00:33 —
+    // ~50 циклов за полторы секунды). Теперь каждое событие hold становится
+    // в очередь, а отдельный поток-шлюз выпускает их с паузой: бэкофф после
+    // неудачных попыток (2→30с) + ожидание реальной сети (не нашей VPN).
+    // Сеть вернётся — openvpn подключится сам, без штурма.
+    private final java.util.concurrent.BlockingQueue<Long> holdEvents =
+            new java.util.concurrent.LinkedBlockingQueue<>();
+    private volatile long lastHoldReleaseMs = 0L;
+    /** Релизов hold подряд без успешного подключения (TUN/Init-seq сбрасывают).
+     *  Считаем В САМОМ шлюзе, а не по stdout openvpn: вывод идёт через пайп
+     *  с буферизацией и отстаёт от management-событий на цикл (проверено 26.10). */
+    private volatile int releasesSinceSuccess = 0;
+    private volatile boolean holdGateStarted = false;
+    private static final long HOLD_MIN_INTERVAL_MS = 2000L;
+    private static final long HOLD_BACKOFF_MAX_MS = 30000L;
+
+    /** Строка из вывода openvpn (зовёт OpenVpnRunner): успешное подключение
+     *  сбрасывает бэкофф шлюза. */
+    void noteOpenVpnLine(String line) {
+        if (line != null && line.contains("Initialization Sequence Completed")) {
+            releasesSinceSuccess = 0;
+        }
+    }
+
+    /** >HOLD: не отвечаем мгновенно — событие в очередь шлюза. */
+    private void gateHoldRelease() {
+        holdEvents.add(System.currentTimeMillis());
+        if (holdGateStarted) {
+            return;
+        }
+        synchronized (this) {
+            if (holdGateStarted) {
+                return;
+            }
+            holdGateStarted = true;
+        }
+        Thread t = new Thread(this::holdGateLoop, "ovpn-hold-gate");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** Цикл шлюза: каждый hold выпускается не раньше паузы (бэкофф 2→30с
+     *  растёт с числом релизов подряд без успеха) и только при наличии сети,
+     *  отличной от нашей VPN. Читатель management-потока при этом не
+     *  блокируется — ждём в отдельном потоке. */
+    private void holdGateLoop() {
+        while (running) {
+            try {
+                if (holdEvents.poll(2, java.util.concurrent.TimeUnit.SECONDS) == null) {
+                    continue; // таймаут — перепроверяем running
+                }
+                long backoff = (releasesSinceSuccess <= 0)
+                        ? HOLD_MIN_INTERVAL_MS
+                        : Math.min(HOLD_MIN_INTERVAL_MS << Math.min(releasesSinceSuccess - 1, 4),
+                                   HOLD_BACKOFF_MAX_MS);
+                long elapsed = System.currentTimeMillis() - lastHoldReleaseMs;
+                if (elapsed < backoff) {
+                    Thread.sleep(backoff - elapsed);
+                }
+                boolean logged = false;
+                while (running && !hasUsableUnderlyingNetwork()) {
+                    if (!logged) {
+                        LogStore.add("Mgmt", "Сеть недоступна — hold не отпускаю, жду интернет"
+                                + " (появится — подключусь сам)");
+                        logged = true;
+                    }
+                    Thread.sleep(2000);
+                }
+                if (!running) {
+                    return;
+                }
+                write("hold release\n");
+                lastHoldReleaseMs = System.currentTimeMillis();
+                releasesSinceSuccess++;
+            } catch (InterruptedException e) {
+                // Случайный interrupt не должен убивать шлюз — иначе openvpn
+                // навсегда застрянет в hold. Выходим только по running=false.
+            }
+        }
+    }
+
+    /** Есть ли сеть, отличная от нашей VPN, с заявленным интернетом
+     *  (Wi-Fi/LTE). Ошибки проверки трактуем как «сеть есть» — не блокируем
+     *  подключение из-за особенностей API. */
+    private boolean hasUsableUnderlyingNetwork() {
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
+                    context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE);
+            if (cm == null) {
+                return true;
+            }
+            for (android.net.Network n : cm.getAllNetworks()) {
+                android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(n);
+                if (caps == null) continue;
+                if (caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) continue;
+                if (!caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue;
+                return true;
+            }
+        } catch (Exception e) {
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Режим интерфейса СЕРВЕРА: "tun" (L3, обычный), "tap" (L2, бриджевый сервер),
      * "auto" (пробуем tap с ARP-детектом, при неудаче откатываемся в tun).
@@ -216,8 +324,10 @@ public class OpenVpnManagementThread implements Runnable {
             LogStore.add("Mgmt", line);
             return;
         } else if (line.startsWith(">HOLD:")) {
-            // OpenVPN ждёт, пока мы разрешим продолжить.
-            write("hold release\n");
+            // OpenVPN ждёт, пока мы разрешим продолжить. Через шлюз (бэкофф +
+            // ожидание сети): мгновенный ответ разгонял цикл «резолв не удался
+            // → рестарт» до десятков итераций в секунду.
+            gateHoldRelease();
         } else if (line.startsWith(">NEED-OK:")) {
             handleNeedOk(line);
         } else if (line.startsWith(">PASSWORD:")) {
@@ -435,6 +545,8 @@ public class OpenVpnManagementThread implements Runnable {
             sendFdToOpenvpn(fd, type);
             Log.i(TAG, "OPENTUN ok, sent tun fd");
             LogStore.add("Mgmt", "OPENTUN ok, TUN-fd передан, ip=" + localIp + " mtu=" + mtu);
+            // Туннель открыт = попытка удалась: сброс бэкоффа hold-шлюза.
+            releasesSinceSuccess = 0;
         } catch (Exception e) {
             Log.e(TAG, "send tun fd failed", e);
             write("needok '" + type + "' cancel\n");

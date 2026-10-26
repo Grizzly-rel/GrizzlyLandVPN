@@ -29,6 +29,14 @@ public class OpenVpnRunner {
     private OpenVpnManagementThread managementThread;
     /** true между началом штатного stop() и смертью процесса — watcher молчит. */
     private volatile boolean intentionalStop = false;
+    /** Фатальная ошибка в выводе (битый конфиг, отказ авторизации) — рестарт
+     *  процесса не поможет, ретраить смысла нет. Сбрасывается в start(). */
+    private volatile boolean fatalFailureSeen = false;
+
+    /** Был ли в выводе открытого процесса признак фатальной ошибки. */
+    public boolean sawFatalFailure() {
+        return fatalFailureSeen;
+    }
     /**
      * Режим OpenVPN-через-SSH: локальный порт SSH-форварда (127.0.0.1:порт),
      * установленный SshTunnel. 0/отрицательное — обычный запуск (форварда нет).
@@ -76,6 +84,7 @@ public class OpenVpnRunner {
             stop();
         }
         intentionalStop = false;
+        fatalFailureSeen = false;
         File dir = context.getFilesDir();
         String keyPath = null, caPath = null, certPath = null, keyFilePath = null;
 
@@ -164,6 +173,25 @@ public class OpenVpnRunner {
                 while ((line = br.readLine()) != null) {
                     Log.i("OpenVPN", line);
                     LogStore.add("OpenVPN", line);
+                    // Темп реконнектов: неудачный резолв → бэкофф hold-шлюза,
+                    // успешное подключение → сброс.
+                    OpenVpnManagementThread m = managementThread;
+                    if (m != null) {
+                        m.noteOpenVpnLine(line);
+                    }
+                    // Фатальные ошибки: неверный конфиг/креды/PEM — рестарт не
+                    // поможет. «Exiting due to fatal error» — общий маркер
+                    // фатального выхода openvpn (сам решил, что продолжать
+                    // нельзя). [PUSH-OPTIONS] исключаем: ошибки пуша сервером
+                    // не фатальны (openvpn продолжает, проверено на
+                    // block-outside-dns). Внезапная смерть БЕЗ этой строки
+                    // (kill, management-exit) — транзиентная, её ретраим.
+                    if (line.contains("AUTH_FAILED")
+                            || line.contains("Exiting due to fatal error")
+                            || (line.startsWith("Options error:")
+                                && !line.contains("[PUSH-OPTIONS]"))) {
+                        fatalFailureSeen = true;
+                    }
                 }
             } catch (Exception e) {
                 Log.e(TAG, "reading openvpn output failed", e);
@@ -182,6 +210,10 @@ public class OpenVpnRunner {
             } catch (InterruptedException e) {
                 return;
             }
+            // Процесс мёртв — флаг running надо сбросить СРАЗУ: иначе ретрай-супервизор
+            // видит isRunning()=true и молча не переподключается (баг 26.10: ретрай-цикл
+            // умирал после второй попытки).
+            running = false;
             if (!intentionalStop && onProcessExit != null) {
                 onProcessExit.run();
             }

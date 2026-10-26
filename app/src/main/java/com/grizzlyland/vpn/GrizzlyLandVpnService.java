@@ -150,6 +150,38 @@ public class GrizzlyLandVpnService extends VpnService {
         }
     }
 
+    /** Ретраи после внезапной смерти процесса openvpn (management-exit,
+     *  убийство системой и т.п.): бэкофф 2→30с, отменяется сменой startEpoch
+     *  (disconnect/новый connect). Фатальные ошибки (битый конфиг, отказ auth)
+     *  не ретраятся — см. OpenVpnRunner.sawFatalFailure(). */
+    private int ovpnRetryAttempts = 0;
+    private int ovpnRetryEpoch = -1;
+    private final Runnable ovpnRetryRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (startEpoch.get() != ovpnRetryEpoch) {
+                return; // отменено: disconnect или пользовательский connect
+            }
+            if (connected || vpnInterface != null || openVpnRunner.isRunning()) {
+                return; // пока ждали — уже подключилось
+            }
+            xrayRunner.stop();
+            stopSshTunnel();
+            connect();
+        }
+    };
+
+    private void scheduleOvpnRetry(String reason) {
+        ovpnRetryEpoch = startEpoch.get();
+        long delay = Math.min(2000L << Math.min(ovpnRetryAttempts, 4), 30000L);
+        ovpnRetryAttempts++;
+        LogStore.add("Service", "OpenVPN: " + reason
+                + " — повторная попытка через " + (delay / 1000) + " с");
+        updateNotification("Подключение…");
+        mainHandler.removeCallbacks(ovpnRetryRunnable);
+        mainHandler.postDelayed(ovpnRetryRunnable, delay);
+    }
+
     private final java.util.concurrent.atomic.AtomicInteger startEpoch =
             new java.util.concurrent.atomic.AtomicInteger(0);
 
@@ -231,6 +263,7 @@ public class GrizzlyLandVpnService extends VpnService {
         // Явный интент (пользователь или смена сети) — новая попытка с нуля.
         wgRetryAttempts = 0;
         tunRetryAttempts = 0;
+        ovpnRetryAttempts = 0;
         if (ACTION_SET_DEBUG.equals(action)) {
             // Живое применение «Подробного журнала» — реконнект НЕ делаем.
             applyLogFlagLive();
@@ -966,6 +999,7 @@ public class GrizzlyLandVpnService extends VpnService {
         connected = false;
         broadcastState();
         xrayRunner.stop();
+        stopSshTunnel();
         if (vpnInterface != null) {
             try {
                 vpnInterface.close();
@@ -973,7 +1007,15 @@ public class GrizzlyLandVpnService extends VpnService {
             }
             vpnInterface = null;
         }
-        stopSelf();
+        // Внезапная смерть процесса (management-exit, убийство системой и т.п.).
+        // Если VPN должен быть подключён (wantConnected) и это не фатальная
+        // ошибка конфига/кредов — перезапускаем с бэкоффом (как ретраи WG);
+        // иначе — стоп как раньше.
+        if (config.getWantConnected() && !openVpnRunner.sawFatalFailure()) {
+            scheduleOvpnRetry("процесс openvpn завершился");
+        } else {
+            stopSelf();
+        }
     }
 
     /**
@@ -995,6 +1037,7 @@ public class GrizzlyLandVpnService extends VpnService {
             if (vpnInterface != null) {
                 connected = true;
                 tunRetryAttempts = 0;
+                ovpnRetryAttempts = 0;
                 broadcastState();
                 updateNotification("VPN активен");
                 LogStore.add("Service", "TUN создан: ip=" + localIp + " mtu=" + mtu
@@ -1035,6 +1078,7 @@ public class GrizzlyLandVpnService extends VpnService {
         tunFdMonitor = new Thread(() -> {
             try {
                 FileDescriptor fd = pfd.getFileDescriptor();
+                boolean lastReadable = false;
                 while (connected && !Thread.currentThread().isInterrupted()) {
                     android.system.StructPollfd[] p = new android.system.StructPollfd[1];
                     p[0] = new android.system.StructPollfd();
@@ -1047,8 +1091,15 @@ public class GrizzlyLandVpnService extends VpnService {
                         boolean err = (p[0].revents
                                 & (android.system.OsConstants.POLLERR
                                 | android.system.OsConstants.POLLNVAL)) != 0;
-                        LogStore.add("TunMon", "poll(fd=" + tunFdNumber(pfd)
-                                + ") POLLIN=" + readable + (err ? " POLLERR/NVAL" : ""));
+                        // Логируем только СМЕНУ состояния (и ошибки): в простое
+                        // POLLIN=false — норма (в TUN нет пакетов), и строчка
+                        // каждые 2с просто заливала журнал (проверено 26.10).
+                        if (readable != lastReadable || err) {
+                            LogStore.add("TunMon", "poll(fd=" + tunFdNumber(pfd)
+                                    + ") POLLIN=" + readable
+                                    + (err ? " POLLERR/NVAL" : " (смена состояния)"));
+                            lastReadable = readable;
+                        }
                     } catch (Exception e) {
                         LogStore.add("TunMon", "poll failed: " + e);
                         return;
@@ -1161,8 +1212,10 @@ public class GrizzlyLandVpnService extends VpnService {
         startEpoch.incrementAndGet(); // отменить асинхронный старт WG-через-Xray и ретраи WG/TUN, если в полёте
         mainHandler.removeCallbacks(wgRetryRunnable);
         mainHandler.removeCallbacks(tunRetryRunnable);
+        mainHandler.removeCallbacks(ovpnRetryRunnable);
         wgRetryAttempts = 0;
         tunRetryAttempts = 0;
+        ovpnRetryAttempts = 0;
         broadcastState();
         LogStore.add("Service", "==== Отключение ====");
         stopTunFdMonitor();
