@@ -14,7 +14,11 @@ import android.content.Intent;
  *  ВАЖНО: если приложение было force-stopнуто или переустановлено, система НЕ
  *  доставит ему BOOT_COMPLETED до следующего ручного запуска (stopped-state,
  *  стандартное поведение Android) — восстановление делает MainActivity при
- *  открытии приложения (autoRestoreIfWanted). */
+ *  открытии приложения (autoRestoreIfWanted). ИСКЛЮЧЕНИЕ: MY_PACKAGE_REPLACED
+ *  доставляется самому приложению сразу после его обновления — через него
+ *  VPN восстанавливается после переустановки без запуска приложения;
+ *  на Android 12+ это ещё и документированное исключение для старта
+ *  foreground-сервиса из фона. */
 public class BootReceiver extends BroadcastReceiver {
     /** Одноразовая будильника из обработчика падений сервиса (см.
      *  GrizzlyLandVpnService.installCrashRestart). */
@@ -26,17 +30,25 @@ public class BootReceiver extends BroadcastReceiver {
         boolean boot = Intent.ACTION_BOOT_COMPLETED.equals(a)
                 || "android.intent.action.QUICKBOOT_POWERON".equals(a);
         boolean alarm = ACTION_ALARM_RESTART.equals(a);
-        if (!boot && !alarm) {
+        // MY_PACKAGE_REPLACED система шлёт САМОМУ приложению сразу после его
+        // обновления/переустановки (install -r). Это единственный системный
+        // сигнал, проходящий сквозь stopped-state (после переустановки всё
+        // остальное — бродкасты, будильники, старты сервисов — не доставляется
+        // до первого ручного запуска). Без него после обновления VPN молчал бы,
+        // пока юзер не откроет приложение (наблюдено 26.10).
+        boolean updated = Intent.ACTION_MY_PACKAGE_REPLACED.equals(a);
+        if (!boot && !alarm && !updated) {
             return;
         }
+        String source = boot ? "Загрузка телефона"
+                : alarm ? "Перезапуск после падения процесса"
+                : "Приложение обновлено (переустановлено)";
         ConfigManager config = new ConfigManager(context);
         if (!config.getWantConnected()) {
-            LogStore.add("Boot", (boot ? "Загрузка телефона" : "Перезапуск после падения")
-                    + ": VPN не был подключён — не подключаю");
+            LogStore.add("Boot", source + ": VPN не был подключён — не подключаю");
             return;
         }
-        LogStore.add("Boot", (boot ? "Загрузка телефона" : "Перезапуск после падения процесса")
-                + ": VPN был подключён — восстанавливаю (режим " + config.getMode() + ")");
+        LogStore.add("Boot", source + ": VPN был подключён — восстанавливаю (режим " + config.getMode() + ")");
         // Без согласия VpnService подключение невозможно (establish() вернёт null)
         // — ретраи будут впустую. Согласие выдаётся один раз и переживает
         // перезагрузку; если его нет — юзер подключится вручную при открытии
