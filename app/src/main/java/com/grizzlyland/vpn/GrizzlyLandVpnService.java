@@ -46,6 +46,13 @@ public class GrizzlyLandVpnService extends VpnService {
      *  При смерти процесса статик сбрасывается в false вместе с процессом. */
     public static volatile boolean serviceActive = false;
 
+    /** «VPN включён, но сети с интернетом нет»: движки и TUN не подняты, ждём
+     *  появления любой сети с работающим интернетом (Wi-Fi/LTE/Ethernet) — тогда
+     *  подключаемся автоматически. Честный текст в уведомлении («Жду появления
+     *  интернета…»), значка ключа в статус-баре нет (TUN не создан), движки не
+     *  тратят батарею на посылку пакетов в никуда. */
+    public static volatile boolean waitingNetwork = false;
+
     private ParcelFileDescriptor vpnInterface;
     private ConfigManager config;
     private XrayRunner xrayRunner = new XrayRunner();
@@ -193,6 +200,7 @@ public class GrizzlyLandVpnService extends VpnService {
         super.onCreate();
         serviceActive = true;
         installCrashRestart();
+        registerConnectivityWatch();
     }
 
     /** При падении процесса (неперехваченное исключение в любом потоке) система
@@ -234,14 +242,10 @@ public class GrizzlyLandVpnService extends VpnService {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         config = new ConfigManager(this);
-        String action = intent != null ? intent.getAction() : null;
-        if (ACTION_DISCONNECT.equals(action)) {
-            // Явное отключение пользователем — автоподключение при загрузке/падении выключаем.
-            config.setWantConnected(false);
-            LogStore.add("Service", "Отключение пользователем — восстановление при загрузке/падении выключено");
-            disconnect();
-            return START_NOT_STICKY;
-        }
+        // startForeground ПЕРВЫМ делом (до ветки DISCONNECT тоже): сервис могут
+        // запустить через startForegroundService из фона (autoRestore за keyguard,
+        // MainActivity.startServiceCompat) — тогда обязаны вызвать startForeground
+        // в любом пути, иначе краш «did not then call Service.startForeground()».
         // Явный тип FGS на 29+ (на Android 14+ тип обязателен; на 26-28 обычный
         // вызов — перегрузки с типом не существует, а 24-25 не знают про FGS вовсе).
         if (Build.VERSION.SDK_INT >= 29) {
@@ -249,6 +253,14 @@ public class GrizzlyLandVpnService extends VpnService {
                     android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
         } else {
             startForeground(NOTIF_ID, buildNotification());
+        }
+        String action = intent != null ? intent.getAction() : null;
+        if (ACTION_DISCONNECT.equals(action)) {
+            // Явное отключение пользователем — автоподключение при загрузке/падении выключаем.
+            config.setWantConnected(false);
+            LogStore.add("Service", "Отключение пользователем — восстановление при загрузке/падении выключено");
+            disconnect();
+            return START_NOT_STICKY;
         }
         // Рестарт сервиса системой после падения процесса (START_STICKY, intent==null):
         // подключаем только если пользователь не отключал VPN сам.
@@ -394,6 +406,15 @@ public class GrizzlyLandVpnService extends VpnService {
                     + (openVpnRunner.isRunning() ? "openvpn живой" : "openvpn не запущен") + ")");
             return;
         }
+        // Сети с интернетом нет — движки и TUN не поднимаем вовсе: честный статус
+        // в уведомлении, значка ключа нет (TUN не создаётся), батарея не тратится.
+        // Подключимся автоматически, когда интернет появится (connWatch → connect()).
+        // Это закрывает шторм при загрузке без сети (WG-движок + «sendmsg: network
+        // is unreachable» + рестарты) для ВСЕХ режимов, не только OpenVPN.
+        if (!hasInternetCapableNetwork()) {
+            enterWaitingForNetwork("на момент подключения");
+            return;
+        }
         startEpoch.incrementAndGet();
         try {
             String mode = config.getMode();
@@ -461,6 +482,222 @@ public class GrizzlyLandVpnService extends VpnService {
             broadcastState();
             stopSelf();
         }
+    }
+
+    // ============ Режим ожидания сети («VPN включён, интернета нет») ============
+    // Проблема (лог юзера 26.10, загрузка без сети, старая версия): сервис поднимал
+    // WG-движок сразу, тот заваливал журнал «sendmsg: network is unreachable»,
+    // уведомление врало «VPN активен», значок ключа висел в статус-баре, батарея
+    // горела на посылке пакетов в никуда и рестартах движка. Теперь: если интернета
+    // нет — TUN/движки не поднимаются вовсе; при ПОЯВЛЕНИИ интернета (любой транспорт)
+    // подключаемся автоматически. Если сеть пропала УЖЕ ПОСЛЕ подключения — держим
+    // туннель GRACE-паузу (короткие обрывы переживает живой туннель), потом глушим
+    // и тоже переходим в ожидание: значок ключа исчезает, уведомление честное.
+
+    /** Грейс-пауза перед глушением туннеля при полной потере сети: короткие
+     *  обрывы (роуминг Wi-Fi, переключение Wi-Fi↔LTE) переживает живой туннель
+     *  без пересоздания; если сеть не вернулась — глушим всё и ждём. */
+    private static final long NET_LOST_GRACE_MS = 10000;
+    /** Уведомление «Сеть пропала — жду…» уже показано и грейс-таймер тикает. */
+    private boolean netLostNotified = false;
+    /** Пассивный колбэк всех сетей с интернетом (весь срок жизни сервиса). */
+    private android.net.ConnectivityManager.NetworkCallback connWatchCallback;
+
+    /** Есть ли сеть с РАБОТАЮЩИМ интернетом: не наша VPN (TRANSPORT_VPN),
+     *  NET_CAPABILITY_INTERNET + VALIDATED. VALIDATED нужен, чтобы не поднимать
+     *  туннель через captive-портал/мёртвый Wi-Fi: «появление интернета» = сеть
+     *  реально пропускает трафик (проверка самой Android). При ошибке определения
+     *  — true (fail-open, как в hold-шлюзе OpenVPN). */
+    private boolean hasInternetCapableNetwork() {
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
+                    getSystemService(CONNECTIVITY_SERVICE);
+            if (cm == null) {
+                return true;
+            }
+            for (android.net.Network n : cm.getAllNetworks()) {
+                android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(n);
+                if (caps == null) continue;
+                if (caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) continue;
+                if (!caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue;
+                if (!caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)) continue;
+                return true;
+            }
+        } catch (Exception e) {
+            return true;
+        }
+        return false;
+    }
+
+    private static String networkLabel(android.net.NetworkCapabilities caps) {
+        if (caps == null) return "Сеть";
+        if (caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) return "VPN (наш tun)";
+        if (caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)) return "Wi-Fi";
+        if (caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)) return "мобильная сеть";
+        if (caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)) return "Ethernet";
+        return "сеть";
+    }
+
+    /** Перейти в ожидание сети: движки/TUN гарантированно погашены, уведомление —
+     *  «Жду появления интернета…». Идемпотентно (повторные вызовы — no-op). */
+    private void enterWaitingForNetwork(String reason) {
+        if (waitingNetwork) {
+            return; // уже ждём — не спамим журналом и уведомлением
+        }
+        waitingNetwork = true;
+        connected = false;
+        lastError = "";
+        netLostNotified = false;
+        mainHandler.removeCallbacks(netLostGraceRunnable);
+        broadcastState();
+        updateNotification("Жду появления интернета…");
+        LogStore.add("Service", "Сети с интернетом нет (" + reason + ") — TUN не поднимаю "
+                + "(значка ключа нет), движки выключены; подключусь сам при появлении интернета");
+    }
+
+    /** Сеть пропала (или потеряла интернет): если это надолго — через грейс-паузу
+     *  глушим туннель и переходим в ожидание; если сеть вернулась в паузу —
+     *  тихо возвращаем обычный статус (туннель само восстановился). */
+    private void maybeHandleNetworkLoss() {
+        if (!connected || waitingNetwork) {
+            return;
+        }
+        if (hasInternetCapableNetwork()) {
+            return; // есть другая сеть с интернетом (например, LTE подхватил вместо Wi-Fi)
+        }
+        if (netLostNotified) {
+            return; // грейс-таймер уже тикает
+        }
+        netLostNotified = true;
+        updateNotification("Сеть пропала — жду…");
+        LogStore.add("Service", "Сети с интернетом нет — держу туннель ещё "
+                + (NET_LOST_GRACE_MS / 1000) + "с (короткий обрыв переживёт), "
+                + "потом глушу до появления сети");
+        mainHandler.removeCallbacks(netLostGraceRunnable);
+        mainHandler.postDelayed(netLostGraceRunnable, NET_LOST_GRACE_MS);
+    }
+
+    /** Сеть появилась / получила интернет: из ожидания — подключаемся; во время
+     *  грейс-паузы после потери — возвращаем обычный статус. */
+    private void maybeHandleNetworkReturn(android.net.NetworkCapabilities caps) {
+        if (caps != null && caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) {
+            return; // собственный tun
+        }
+        if (waitingNetwork) {
+            if (caps == null || !caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+                return;
+            }
+            if (!caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+                LogStore.add("Service", networkLabel(caps)
+                        + " появилась, но интернет ещё не проверен — жду валидации");
+                return; // валидация придёт отдельным onCapabilitiesChanged
+            }
+            LogStore.add("Service", networkLabel(caps) + " с интернетом — подключаюсь");
+            waitingNetwork = false;
+            connect();
+        } else if (connected && netLostNotified
+                && caps != null
+                && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+            netLostNotified = false;
+            mainHandler.removeCallbacks(netLostGraceRunnable);
+            updateNotification("VPN активен");
+            LogStore.add("Service", networkLabel(caps) + " вернулась — туннель работает");
+        }
+    }
+
+    private final Runnable netLostGraceRunnable = new Runnable() {
+        @Override
+        public void run() {
+            netLostNotified = false;
+            if (!connected || waitingNetwork) {
+                return; // уже отключено/уже ждём
+            }
+            if (hasInternetCapableNetwork()) {
+                updateNotification("VPN активен"); // сеть вернулась, пока шла пауза
+                return;
+            }
+            LogStore.add("Service", "Сети нет уже " + (NET_LOST_GRACE_MS / 1000)
+                    + "с — глушу туннель и движки до появления интернета "
+                    + "(значок ключа исчезнет, батарея не тратится)");
+            connected = false;
+            broadcastState();
+            xrayRunner.stop();
+            openVpnRunner.stop();
+            stopSshTunnel();
+            stopWgEngine();
+            if (vpnInterface != null) {
+                try {
+                    vpnInterface.close();
+                } catch (Exception ignored) {
+                }
+                vpnInterface = null;
+            }
+            enterWaitingForNetwork("сеть пропала надолго");
+        }
+    };
+
+    /** Пассивное слежение за сетями (все виды соединений, не только default):
+     *  появление интернета → автоподключение из ожидания; потеря → честный
+     *  статус и (после грейса) глушение туннеля. Ноль поллинга и будильников —
+     *  колбэки приходят только при изменениях сети. */
+    private void registerConnectivityWatch() {
+        if (connWatchCallback != null) {
+            return;
+        }
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
+                    getSystemService(CONNECTIVITY_SERVICE);
+            android.net.NetworkRequest req = new android.net.NetworkRequest.Builder()
+                    .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .build();
+            connWatchCallback = new android.net.ConnectivityManager.NetworkCallback() {
+                @Override
+                public void onAvailable(android.net.Network network) {
+                    android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+                    LogStore.add("Service", "Сеть доступна: " + networkLabel(caps)
+                            + (caps != null && caps.hasCapability(
+                                    android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                                    ? " (есть интернет)" : " (без интернета)"));
+                    maybeHandleNetworkReturn(caps);
+                }
+
+                @Override
+                public void onCapabilitiesChanged(android.net.Network network,
+                                                  android.net.NetworkCapabilities caps) {
+                    if (caps != null
+                            && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+                        maybeHandleNetworkReturn(caps);
+                    } else {
+                        maybeHandleNetworkLoss();
+                    }
+                }
+
+                @Override
+                public void onLost(android.net.Network network) {
+                    android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+                    LogStore.add("Service", "Сеть потеряна: "
+                            + (caps == null ? "интерфейс исчез" : networkLabel(caps)));
+                    maybeHandleNetworkLoss();
+                }
+            };
+            cm.registerNetworkCallback(req, connWatchCallback);
+            LogStore.add("Service", "Слежение за сетью включено (интернет появился → автоподключение)");
+        } catch (Exception e) {
+            LogStore.add("Service", "Слежение за сетью не зарегистрировано: " + e);
+        }
+    }
+
+    private void unregisterConnectivityWatch() {
+        if (connWatchCallback == null) {
+            return;
+        }
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
+                    getSystemService(CONNECTIVITY_SERVICE);
+            cm.unregisterNetworkCallback(connWatchCallback);
+        } catch (Exception ignored) {
+        }
+        connWatchCallback = null;
     }
 
     /** Запуск режимов с OpenVPN (только OpenVPN / Xray+OpenVPN / OpenVPN-через-SSH). */
@@ -1213,6 +1450,9 @@ public class GrizzlyLandVpnService extends VpnService {
         mainHandler.removeCallbacks(wgRetryRunnable);
         mainHandler.removeCallbacks(tunRetryRunnable);
         mainHandler.removeCallbacks(ovpnRetryRunnable);
+        mainHandler.removeCallbacks(netLostGraceRunnable);
+        waitingNetwork = false;
+        netLostNotified = false;
         wgRetryAttempts = 0;
         tunRetryAttempts = 0;
         ovpnRetryAttempts = 0;
@@ -1251,6 +1491,7 @@ public class GrizzlyLandVpnService extends VpnService {
     public void onDestroy() {
         serviceActive = false;
         disconnect();
+        unregisterConnectivityWatch();
         super.onDestroy();
     }
 
@@ -1310,8 +1551,13 @@ public class GrizzlyLandVpnService extends VpnService {
         }
     }
 
+    /** Текст по состоянию: раньше при старте сервиса (в т.ч. при загрузке телефона
+     *  без сети) уведомление сразу врало «VPN активен». */
     private Notification buildNotification() {
-        return buildNotification("VPN активен");
+        if (waitingNetwork) {
+            return buildNotification("Жду появления интернета…");
+        }
+        return buildNotification("Подключение…");
     }
 
     private Notification buildNotification(String contentText) {

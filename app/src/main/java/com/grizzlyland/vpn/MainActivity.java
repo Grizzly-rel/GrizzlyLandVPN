@@ -219,15 +219,32 @@ public class MainActivity extends Activity {
     private void startVpn() {
         Intent i = new Intent(this, GrizzlyLandVpnService.class);
         i.setAction(GrizzlyLandVpnService.ACTION_CONNECT);
-        startService(i);
+        startServiceCompat(i);
         refreshStatus();
     }
 
     private void disconnect() {
         Intent i = new Intent(this, GrizzlyLandVpnService.class);
         i.setAction(GrizzlyLandVpnService.ACTION_DISCONNECT);
-        startService(i);
+        startServiceCompat(i);
         refreshStatus();
+    }
+
+    /** Активити может оказаться ФОНОМ, даже будучи открытой: autoRestore срабатывает
+     *  в onStart ЗА keyguard'ом (экран заблокирован — наблюдено 26.10: краш
+     *  «Not allowed to start service … app is in background» и смерть процесса).
+     *  startForegroundService из фона разрешён; сервис вызывает startForeground
+     *  в onStartCommand сразу, так что требование FGS выполняется. */
+    private void startServiceCompat(Intent i) {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                startForegroundService(i);
+            } else {
+                startService(i);
+            }
+        } catch (IllegalStateException e) {
+            // Система совсем запретила старт — не роняем активити, статус покажет состояние.
+        }
     }
 
     /** Готов ли конфиг к подключению для выбранного режима. */
@@ -317,6 +334,11 @@ public class MainActivity extends Activity {
         } else {
             sb.append("\nВыбрано приложений: ").append(count);
         }
+        if (GrizzlyLandVpnService.waitingNetwork) {
+            sb.append("\nСети нет — жду появления интернета (подключусь автоматически)");
+        } else if (GrizzlyLandVpnService.serviceActive && !GrizzlyLandVpnService.connected) {
+            sb.append("\nПодключение…");
+        }
         String err = GrizzlyLandVpnService.lastError;
         if (err != null && !err.isEmpty()) {
             sb.append("\n\nОшибка: ").append(err);
@@ -326,14 +348,19 @@ public class MainActivity extends Activity {
         boolean ready = isReady(config);
         boolean isConnected = GrizzlyLandVpnService.connected;
 
-        connectButton.setEnabled(ready && !isConnected);
+        // ПОДКЛЮЧИТЬ неактивна, пока сервис жив (подключается / ждёт сеть / ретраит) —
+        // повторный тап в этот момент только мешает текущей попытке.
+        connectButton.setEnabled(ready && !isConnected && !GrizzlyLandVpnService.serviceActive);
         if (ready) {
             connectButton.setText("Подключить (" + modeLabel + ")");
         } else {
             connectButton.setText("Подключить (настройте параметры)");
         }
 
-        disconnectButton.setEnabled(isConnected);
+        // ОТКЛЮЧИТЬ активна всегда, когда жив процесс VPN (подключается, ждёт сети,
+        // ретраит), а не только при connected: раньше во время штурма реконнектов
+        // («влип» в фазу коннекта) выключить VPN с главного экрана было невозможно.
+        disconnectButton.setEnabled(isConnected || GrizzlyLandVpnService.serviceActive);
     }
 
     private String modeLabel(String mode) {
