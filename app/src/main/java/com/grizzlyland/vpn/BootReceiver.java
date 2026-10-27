@@ -26,6 +26,7 @@ public class BootReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
+        L10n.init(context);
         String a = intent == null ? null : intent.getAction();
         boolean boot = Intent.ACTION_BOOT_COMPLETED.equals(a)
                 || "android.intent.action.QUICKBOOT_POWERON".equals(a);
@@ -40,21 +41,21 @@ public class BootReceiver extends BroadcastReceiver {
         if (!boot && !alarm && !updated) {
             return;
         }
-        String source = boot ? "Загрузка телефона"
-                : alarm ? "Перезапуск после падения процесса"
-                : "Приложение обновлено (переустановлено)";
+        String source = boot ? L10n.s(R.string.log_boot_01)
+                : alarm ? L10n.s(R.string.log_boot_02)
+                : L10n.s(R.string.log_boot_03);
         ConfigManager config = new ConfigManager(context);
         if (!config.getWantConnected()) {
-            LogStore.add("Boot", source + ": VPN не был подключён — не подключаю");
+            LogStore.add("Boot", source + L10n.s(R.string.log_boot_04));
             return;
         }
-        LogStore.add("Boot", source + ": VPN был подключён — восстанавливаю (режим " + config.getMode() + ")");
+        LogStore.add("Boot", source + L10n.s(R.string.log_boot_05) + config.getMode() + ")");
         // Без согласия VpnService подключение невозможно (establish() вернёт null)
         // — ретраи будут впустую. Согласие выдаётся один раз и переживает
         // перезагрузку; если его нет — юзер подключится вручную при открытии
         // приложения (там системный диалог).
         if (android.net.VpnService.prepare(context) != null) {
-            LogStore.add("Boot", "Согласие на VPN не выдано — не подключаю (подключите вручную)");
+            LogStore.add("Boot", L10n.s(R.string.log_boot_06));
             return;
         }
         Intent i = new Intent(context, GrizzlyLandVpnService.class);
@@ -72,7 +73,7 @@ public class BootReceiver extends BroadcastReceiver {
             // Android 12+: FGS из фона под запретом (будильника не в списке
             // исключений) — на таких устройствах восстановление после падения
             // потребует открыть приложение; BOOT_COMPLETED exemption действует.
-            LogStore.add("Boot", "Не смог запустить сервис из фона: " + e);
+            LogStore.add("Boot", L10n.s(R.string.log_boot_07) + e);
         }
     }
 }

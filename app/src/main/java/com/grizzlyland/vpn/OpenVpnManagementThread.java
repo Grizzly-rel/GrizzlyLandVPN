@@ -76,7 +76,7 @@ public class OpenVpnManagementThread implements Runnable {
         if (ip == null || ip.isEmpty()) return;
         if (!pushedDns.contains(ip)) {
             pushedDns.add(ip);
-            LogStore.add("Mgmt", "Сервер пушит DNS: " + ip);
+            LogStore.add("Mgmt", L10n.s(R.string.log_mgmt_01) + ip);
         }
     }
 
@@ -84,7 +84,7 @@ public class OpenVpnManagementThread implements Runnable {
         if (route == null || route.trim().isEmpty()) return;
         if (!pushedRoutes.contains(route)) {
             pushedRoutes.add(route.trim());
-            LogStore.add("Mgmt", "Сервер пушит маршрут: " + route);
+            LogStore.add("Mgmt", L10n.s(R.string.log_mgmt_02) + route);
         }
     }
 
@@ -153,8 +153,8 @@ public class OpenVpnManagementThread implements Runnable {
                 boolean logged = false;
                 while (running && !hasUsableUnderlyingNetwork()) {
                     if (!logged) {
-                        LogStore.add("Mgmt", "Сеть недоступна — hold не отпускаю, жду интернет"
-                                + " (появится — подключусь сам)");
+                        LogStore.add("Mgmt", L10n.s(R.string.log_mgmt_03)
+                                + L10n.s(R.string.log_mgmt_04));
                         logged = true;
                     }
                     waitedForNetwork = true;
@@ -345,7 +345,7 @@ public class OpenVpnManagementThread implements Runnable {
             // Формат: >PASSWORD:Need '<TYPE>' password confirmation
             String type = extractQuotedType(line.substring(">PASSWORD:".length()));
             Log.d(TAG, "mgmt password request: " + line);
-            LogStore.add("Mgmt", "Запрос пароля: " + line);
+            LogStore.add("Mgmt", L10n.s(R.string.log_mgmt_05) + line);
             if ("Auth".equals(type)) {
                 if (authUsername != null && !authUsername.isEmpty()) {
                     write("username 'Auth' " + authUsername + "\n");
@@ -438,12 +438,12 @@ public class OpenVpnManagementThread implements Runnable {
                         if (pfd != null) {
                             s.setNetwork(localIp, remoteNetmask);
                             s.attachTun(pfd);
-                            LogStore.add("Mgmt", "TAP: TUN создан после IFCONFIG: ip="
+                            LogStore.add("Mgmt", L10n.s(R.string.log_mgmt_06)
                                     + localIp + " ip-mtu=" + ipMtu);
                         }
                     } catch (Exception e) {
                         Log.e(TAG, "tap tun attach failed", e);
-                        LogStore.add("Mgmt", "ОШИБКА привязки TUN в TAP: " + e);
+                        LogStore.add("Mgmt", L10n.s(R.string.log_mgmt_07) + e);
                     }
                 }
                 break;
@@ -457,7 +457,7 @@ public class OpenVpnManagementThread implements Runnable {
                 String[] p = extra.trim().split("\\s+");
                 if (p.length >= 2) {
                     String gw = p.length >= 3 ? p[2] : "vpn_gateway";
-                    LogStore.add("Mgmt", "Сервер пушит ROUTE: " + extra.trim());
+                    LogStore.add("Mgmt", L10n.s(R.string.log_mgmt_08) + extra.trim());
                     if (!"net_gateway".equals(gw)) {
                         addPushedRoute(p[0] + " " + p[1] + " " + gw);
                     }
@@ -473,7 +473,7 @@ public class OpenVpnManagementThread implements Runnable {
             case "ROUTE6":
             case "DNS6SERVER":
                 // IPv6: tun IPv4-only, осознанно не применяем.
-                LogStore.add("Mgmt", "IPv6-опция пропущена: " + type);
+                LogStore.add("Mgmt", L10n.s(R.string.log_mgmt_09) + type);
                 write("needok '" + type + "' ok\n");
                 break;
             case "DNSDOMAIN":
@@ -550,11 +550,11 @@ public class OpenVpnManagementThread implements Runnable {
             } catch (Exception pe) {
                 fst = "fstat/poll failed: " + pe;
             }
-            LogStore.add("Mgmt", "TUN-fd диагностика: fd=" + fdNum + " " + fst
+            LogStore.add("Mgmt", L10n.s(R.string.log_mgmt_10) + fdNum + " " + fst
                     + " POLLIN(0ms)=" + readable);
             sendFdToOpenvpn(fd, type);
             Log.i(TAG, "OPENTUN ok, sent tun fd");
-            LogStore.add("Mgmt", "OPENTUN ok, TUN-fd передан, ip=" + localIp + " mtu=" + mtu);
+            LogStore.add("Mgmt", L10n.s(R.string.log_mgmt_11) + localIp + " mtu=" + mtu);
             // Туннель открыт = попытка удалась: сброс бэкоффа hold-шлюза.
             releasesSinceSuccess = 0;
         } catch (Exception e) {
@@ -606,11 +606,11 @@ public class OpenVpnManagementThread implements Runnable {
             shim.start();
             sendFdToOpenvpn(pair[1], type);
             Log.i(TAG, "OPENTUN ok (tap, ip pending), sent socketpair fd");
-            LogStore.add("Mgmt", "OPENTUN ok (tap): L2-пара передана, ждём IFCONFIG для создания TUN"
-                    + ("auto".equals(linkModeValue) ? " [auto: при неудаче ARP откат в tun]" : ""));
+            LogStore.add("Mgmt", L10n.s(R.string.log_mgmt_12)
+                    + ("auto".equals(linkModeValue) ? L10n.s(R.string.log_mgmt_13) : ""));
         } catch (Exception e) {
             Log.e(TAG, "tap opentun failed", e);
-            LogStore.add("Mgmt", "ОШИБКА TAP OPENTUN: " + e);
+            LogStore.add("Mgmt", L10n.s(R.string.log_mgmt_14) + e);
             if (shim != null) {
                 shim.stop();
                 shim = null;
@@ -623,14 +623,14 @@ public class OpenVpnManagementThread implements Runnable {
         return new TapShim(pfd, sockFd, null, null, new TapShim.Listener() {
             @Override
             public void onTapConfirmed() {
-                LogStore.add("Mgmt", "TAP-режим подтверждён (ARP-ответ шлюза)");
+                LogStore.add("Mgmt", L10n.s(R.string.log_mgmt_15));
             }
 
             @Override
             public void onTapFailed() {
                 // Авто-отката больше нет (режим берётся из dev конфига).
                 // Это чисто диагностическое событие: tap выбран, но шлюз не отвечает.
-                LogStore.add("Mgmt", "TAP: ARP-ответ шлюза не получен — проверьте сервер/сеть");
+                LogStore.add("Mgmt", L10n.s(R.string.log_mgmt_16));
             }
         });
     }

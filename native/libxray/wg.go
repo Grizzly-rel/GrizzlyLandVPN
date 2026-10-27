@@ -6,6 +6,7 @@
 package libxray
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -76,7 +77,7 @@ func wgResolveEndpoints(ipc string) (string, error) {
 		}
 		ips, err := net.LookupIP(host)
 		if err != nil {
-			return "", fmt.Errorf("резолв endpoint %q: %w", host, err)
+			return "", fmt.Errorf("%s %q: %w", tr("резолв endpoint", "resolve endpoint"), host, err)
 		}
 		var ip net.IP
 		for _, a := range ips {
@@ -89,7 +90,7 @@ func wgResolveEndpoints(ipc string) (string, error) {
 			ip = ips[0]
 		}
 		if ip == nil {
-			return "", fmt.Errorf("резолв endpoint %q: адресов не получено", host)
+			return "", fmt.Errorf("%s %q: %s", tr("резолв endpoint", "resolve endpoint"), host, tr("адресов не получено", "no addresses"))
 		}
 		wgAppend("V:", "endpoint "+host+" -> "+ip.String())
 		lines[i] = "endpoint=" + net.JoinHostPort(ip.String(), port)
@@ -99,7 +100,7 @@ func wgResolveEndpoints(ipc string) (string, error) {
 
 func WgTurnOn(ipcConfig string, fd int32, verbose bool) (int64, error) {
 	if strings.TrimSpace(ipcConfig) == "" {
-		return 0, fmt.Errorf("пустой конфиг")
+		return 0, errors.New(tr("пустой конфиг", "empty config"))
 	}
 	wgVerbose.Store(verbose)
 	logger := &device.Logger{
@@ -114,7 +115,7 @@ func WgTurnOn(ipcConfig string, fd int32, verbose bool) (int64, error) {
 	}
 	tunDev, _, err := tun.CreateUnmonitoredTUNFromFD(int(fd))
 	if err != nil {
-		return 0, fmt.Errorf("tun из fd %d: %w", fd, err)
+		return 0, fmt.Errorf("%s %d: %w", tr("tun из fd", "tun from fd"), fd, err)
 	}
 	// Резолв endpoint'ов ПОСЛЕ создания tun-девайса: при ошибке резолва
 	// (сеть пропала / только возвращается — DNS ещё не поднялся; это
@@ -153,7 +154,7 @@ func WgTurnOff(h int64) error {
 	}
 	wgMu.Unlock()
 	if !ok {
-		return fmt.Errorf("нет такого handle: %d", h)
+		return fmt.Errorf("%s %d", tr("нет такого handle", "no such handle"), h)
 	}
 	dev.Close()
 	return nil

@@ -183,4 +183,209 @@
     <string name="notif_connected">VPN active</string>
     <string name="notif_waiting_internet">Waiting for internet…</string>
     <string name="notif_network_lost">Network lost — waiting…</string>
+
+    <!-- ==== Лог/диагностика нашего кода (LogStore, lastError, исключения) ==== -->
+    <string name="log_awgp_01">"Obfuscation parameter "</string>
+    <string name="log_awgp_02">\" is not a number 0..4294967295</string>
+    <string name="log_awgp_03">) is greater than Jmax (</string>
+    <string name="log_awgp_04">default (no obfuscation)</string>
+    <string name="log_awgp_05">"key must be 32 bytes, got "</string>
+    <string name="log_arun_01">start(): engine already running — skipping</string>
+    <string name="log_arun_02">engine up (handle=</string>
+    <string name="log_arun_03">engine stopped (handle=</string>
+    <string name="log_arun_04">"engine stop error: "</string>
+    <string name="log_boot_01">Phone boot</string>
+    <string name="log_boot_02">Restart after process crash</string>
+    <string name="log_boot_03">App updated (reinstalled)</string>
+    <string name="log_boot_04">: VPN was not connected — not connecting</string>
+    <string name="log_boot_05">": VPN was connected — restoring (mode "</string>
+    <string name="log_boot_06">VPN consent not granted — not connecting (connect manually)</string>
+    <string name="log_boot_07">"Failed to start service from background: "</string>
+    <string name="log_svc_01">" — retrying in "</string>
+    <string name="log_svc_02">" s"</string>
+    <string name="log_svc_03">VpnService did not grant TUN (</string>
+    <string name="log_svc_04">") — retry in "</string>
+    <string name="log_svc_05">" s (after phone boot: waiting for screen unlock)"</string>
+    <string name="log_svc_06">ERROR: VpnService did not grant TUN (</string>
+    <string name="log_svc_07">VpnService did not grant TUN</string>
+    <string name="log_svc_08">Process died — VPN restart alarm in ~3s</string>
+    <string name="log_svc_09">Disconnected by user — boot/crash restore disabled</string>
+    <string name="log_svc_10">Restart after crash: VPN was not running — not connecting</string>
+    <string name="log_svc_11">WireGuard: verbose engine lines shown (filter removed)</string>
+    <string name="log_svc_12">WireGuard: verbose engine lines hidden</string>
+    <string name="log_svc_13">AmneziaWG: verbose engine lines shown (filter removed)</string>
+    <string name="log_svc_14">AmneziaWG: verbose engine lines hidden</string>
+    <string name="log_svc_15">Xray restarted (loglevel=</string>
+    <string name="log_svc_16">), TUN not recreated</string>
+    <string name="log_svc_17">"Xray restart error: "</string>
+    <string name="log_svc_18">connect(): interface already exists — skipping (</string>
+    <string name="log_svc_19">openvpn alive</string>
+    <string name="log_svc_20">openvpn not running</string>
+    <string name="log_svc_21">at connect time</string>
+    <string name="log_svc_22">"==== Connecting (mode: "</string>
+    <string name="log_svc_23">"Xray TUN start error: "</string>
+    <string name="log_svc_24">Network</string>
+    <string name="log_svc_25">VPN (our tun)</string>
+    <string name="log_svc_26">mobile network</string>
+    <string name="log_svc_27">network</string>
+    <string name="log_svc_28">No internet-capable network (</string>
+    <string name="log_svc_29">") — not raising TUN "</string>
+    <string name="log_svc_30">(no key icon), engines off; will connect automatically when internet appears</string>
+    <string name="log_svc_31">"No internet-capable network — keeping the tunnel for "</string>
+    <string name="log_svc_32">"s (short outages survive), "</string>
+    <string name="log_svc_33">then shutting it down until the network returns</string>
+    <string name="log_svc_34">" appeared, but internet is not validated yet — waiting for validation"</string>
+    <string name="log_svc_35">" with internet — connecting"</string>
+    <string name="log_svc_36">" is back — tunnel is working"</string>
+    <string name="log_svc_37">"No network for "</string>
+    <string name="log_svc_38">"s — shutting down the tunnel and engines until internet appears "</string>
+    <string name="log_svc_39">(the key icon will disappear, battery is spared)</string>
+    <string name="log_svc_40">network lost for good</string>
+    <string name="log_svc_41">"Network available: "</string>
+    <string name="log_svc_42">" (internet)"</string>
+    <string name="log_svc_43">" (no internet)"</string>
+    <string name="log_svc_44">"Network lost: "</string>
+    <string name="log_svc_45">interface disappeared</string>
+    <string name="log_svc_46">Network watching enabled (internet appeared → auto-connect)</string>
+    <string name="log_svc_47">"Network watching not registered: "</string>
+    <string name="log_svc_48">SSH: host/user not set (Settings → SSH settings)</string>
+    <string name="log_svc_49">"ERROR: "</string>
+    <string name="log_svc_50">SSH tunnel ready, local forward 127.0.0.1:</string>
+    <string name="log_svc_51">"OpenVPN start error (SSH mode): "</string>
+    <string name="log_svc_52">"SSH error: "</string>
+    <string name="log_svc_53">WG: invalid config</string>
+    <string name="log_svc_54">" (Settings → WireGuard settings)"</string>
+    <string name="log_svc_55">WG config: addresses=</string>
+    <string name="log_svc_56">WireGuard: tunnel is up</string>
+    <string name="log_svc_57">"WG error: "</string>
+    <string name="log_svc_58">network unavailable (endpoint resolution)</string>
+    <string name="log_svc_59">AWG: invalid config</string>
+    <string name="log_svc_60">" (Settings → AmneziaWG settings)"</string>
+    <string name="log_svc_61">AWG config: addresses=</string>
+    <string name="log_svc_62">" obfuscation jc="</string>
+    <string name="log_svc_63">AmneziaWG: tunnel is up</string>
+    <string name="log_svc_64">"AWG error: "</string>
+    <string name="log_svc_65">"WG config contains "</string>
+    <string name="log_svc_66">" peer — in the via-Xray mode only the first one is used ("</string>
+    <string name="log_svc_67">WG via Xray: endpoint=</string>
+    <string name="log_svc_68">" addresses="</string>
+    <string name="log_svc_69">WG via Xray start cancelled (state changed)</string>
+    <string name="log_svc_70">WG via Xray</string>
+    <string name="log_svc_71">"Xray start error (WG via Xray): "</string>
+    <string name="log_svc_72">Apps: whole device (the \"VPN for the whole device\" switch)</string>
+    <string name="log_svc_73">Apps: whole device (per-app list is empty)</string>
+    <string name="log_svc_74">"Per-app: selected apps: "</string>
+    <string name="log_svc_75">"route: "</string>
+    <string name="log_svc_76">network changed — restarting the WG tunnel</string>
+    <string name="log_svc_77">"NetworkCallback not registered: "</string>
+    <string name="log_svc_78">OpenVPN exited on its own — VPN disconnected</string>
+    <string name="log_svc_79">openvpn process exited</string>
+    <string name="log_svc_80">TUN created: ip=</string>
+    <string name="log_svc_81">" (state change)"</string>
+    <string name="log_svc_82">"Server route: "</string>
+    <string name="log_svc_83">==== Disconnect ====</string>
+    <string name="log_svc_84">VPN revoked by the system (onRevoke) — boot/crash restore disabled</string>
+    <string name="log_logs_01">Verbose log enabled</string>
+    <string name="log_logs_02">Verbose log disabled</string>
+    <string name="log_main_01">"b64 decode error: "</string>
+    <string name="log_main_02">Settings import via intent (</string>
+    <string name="log_main_03">" bytes)"</string>
+    <string name="log_main_04">"Intent import error: "</string>
+    <string name="log_main_05">VPN was connected before the restart, but VPN consent is not granted — auto-connect skipped</string>
+    <string name="log_main_06">"VPN was connected before the app restart — restoring (mode "</string>
+    <string name="log_mgmt_01">"Server pushes DNS: "</string>
+    <string name="log_mgmt_02">"Server pushes route: "</string>
+    <string name="log_mgmt_03">Network unavailable — not releasing hold, waiting for internet</string>
+    <string name="log_mgmt_04">" (will connect automatically when it appears)"</string>
+    <string name="log_mgmt_05">"Password request: "</string>
+    <string name="log_mgmt_06">TAP: TUN created after IFCONFIG: ip=</string>
+    <string name="log_mgmt_07">"TUN bind error in TAP: "</string>
+    <string name="log_mgmt_08">"Server pushes ROUTE: "</string>
+    <string name="log_mgmt_09">"IPv6 option skipped: "</string>
+    <string name="log_mgmt_10">TUN-fd diagnostics: fd=</string>
+    <string name="log_mgmt_11">OPENTUN ok, TUN-fd passed, ip=</string>
+    <string name="log_mgmt_12">OPENTUN ok (tap): L2 pair passed, waiting for IFCONFIG to create the TUN</string>
+    <string name="log_mgmt_13">" [auto: ARP failure falls back to tun]"</string>
+    <string name="log_mgmt_14">"TAP OPENTUN error: "</string>
+    <string name="log_mgmt_15">TAP mode confirmed (gateway ARP reply)</string>
+    <string name="log_mgmt_16">TAP: no gateway ARP reply — check the server/network</string>
+    <string name="log_orun_01">Live openvpn process found — restarting with the new config</string>
+    <string name="log_orun_02">Using the imported .ovpn (raw config)</string>
+    <string name="log_orun_03">SSH forward: remote → 127.0.0.1:</string>
+    <string name="log_orun_04">, proto tcp (retrying while SSH reconnects)</string>
+    <string name="log_orun_05">"Server interface mode: "</string>
+    <string name="log_orun_06">" (from the config dev directive)"</string>
+    <string name="log_orun_07">Starting OpenVPN, remote=</string>
+    <string name="log_orun_08">"Config:\n"</string>
+    <string name="log_orun_09">"ERROR: native openvpn binary unavailable: "</string>
+    <string name="log_orun_10">openvpn process exited, code=</string>
+    <string name="log_orun_11">openvpn process started</string>
+    <string name="log_orun_12">"OpenVPN stop error: "</string>
+    <string name="log_orun_13">OpenVPN stopped</string>
+    <string name="log_qr_01">StreamConfigurationMap unavailable</string>
+    <string name="log_qr_02">"camera "</string>
+    <string name="log_qr_03">", analysis frame "</string>
+    <string name="log_qr_04">", sensor "</string>
+    <string name="log_qr_05">camera session ready</string>
+    <string name="log_qr_06">ERROR: camera session failed to configure</string>
+    <string name="log_qr_07">"torch: "</string>
+    <string name="log_qr_08">on</string>
+    <string name="log_qr_09">off</string>
+    <string name="log_qr_10">"torch unavailable: "</string>
+    <string name="log_qr_11">frame #</string>
+    <string name="log_qr_12">"decode error: "</string>
+    <string name="log_qr_13">QR recognized (</string>
+    <string name="log_qr_14">" chars)"</string>
+    <string name="log_ssh_01">SSH session restored, forward 127.0.0.1:</string>
+    <string name="log_ssh_02">SSH session dropped</string>
+    <string name="log_ssh_03">"SSH error: "</string>
+    <string name="log_ssh_04">"Retry in "</string>
+    <string name="log_ssh_05">"s (attempt "</string>
+    <string name="log_ssh_06">"Failed to read the SSH private key "</string>
+    <string name="log_ssh_07">"(check the key and the key passphrase in SSH settings): "</string>
+    <string name="log_ssh_08">Auth: private key</string>
+    <string name="log_ssh_09">"Connecting to "</string>
+    <string name="log_ssh_10">SSH authentication failed (</string>
+    <string name="log_ssh_11">). Check the username/password/key in SSH settings.</string>
+    <string name="log_ssh_12">"Host key fingerprint saved (TOFU): "</string>
+    <string name="log_ssh_13">"SSH host key fingerprint CHANGED (was: "</string>
+    <string name="log_ssh_14">", now: "</string>
+    <string name="log_ssh_15">"). Possible MITM or server reinstall. "</string>
+    <string name="log_ssh_16">If the server was changed intentionally — reset the fingerprint in SSH settings.</string>
+    <string name="log_ssh_17">"Failed to bind the local port "</string>
+    <string name="log_ssh_18">SSH session established; forward 127.0.0.1:</string>
+    <string name="log_ssh_19">"protect(fd) failed: "</string>
+    <string name="log_tap_01">TUN bound to the shim</string>
+    <string name="log_tap_02">Network received: ip=</string>
+    <string name="log_tap_03">" mask="</string>
+    <string name="log_tap_04">" gateway="</string>
+    <string name="log_tap_05">Start (L2 pair active): mac=</string>
+    <string name="log_tap_06">" (network will arrive from IFCONFIG)"</string>
+    <string name="log_tap_07">" [TUN already bound]"</string>
+    <string name="log_tap_08">" — ARP detection of the tap server"</string>
+    <string name="log_tap_09">"TUN read error: "</string>
+    <string name="log_tap_10">"L2 pair read error: "</string>
+    <string name="log_tap_11">"ARP reply from "</string>
+    <string name="log_tap_12">) — TAP server confirmed</string>
+    <string name="log_tap_13">No IFCONFIG within 15s — falling back from TAP</string>
+    <string name="log_tap_14">" not received within "</string>
+    <string name="log_tap_15">s — the server is probably not TAP</string>
+    <string name="log_xcb_01">WireGuard config is invalid</string>
+    <string name="log_xcb_02">WireGuard config peer has no Endpoint</string>
+    <string name="log_xrun_01">Starting Xray (TUN), fd=</string>
+    <string name="log_xrun_02">Xray TUN started, version=</string>
+    <string name="log_xrun_03">Starting Xray (TUN+WG), fd=</string>
+    <string name="log_xrun_04">Xray TUN+WG started, version=</string>
+    <string name="log_xrun_05">ERROR: custom config is empty</string>
+    <string name="log_xrun_06">Empty Xray custom config (fill it in the settings)</string>
+    <string name="log_xrun_07">"ERROR: invalid JSON: "</string>
+    <string name="log_xrun_08">"Invalid JSON in the custom config: "</string>
+    <string name="log_xrun_09">ERROR: no outbounds in the custom config</string>
+    <string name="log_xrun_10">No outbounds in the custom config</string>
+    <string name="log_xrun_11">Starting Xray (custom), fd=</string>
+    <string name="log_xrun_12">Xray custom started, version=</string>
+    <string name="log_xrun_13">Starting Xray (SOCKS) on 127.0.0.1:</string>
+    <string name="log_xrun_14">Xray SOCKS started, version=</string>
+    <string name="log_xrun_15">"Xray stop error: "</string>
+    <string name="log_xrun_16">Xray stopped</string>
 </resources>

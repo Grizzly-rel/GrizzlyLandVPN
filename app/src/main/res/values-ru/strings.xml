@@ -183,4 +183,209 @@
     <string name="notif_connected">VPN активен</string>
     <string name="notif_waiting_internet">Жду появления интернета…</string>
     <string name="notif_network_lost">Сеть пропала — жду…</string>
+
+    <!-- ==== Лог/диагностика нашего кода (LogStore, lastError, исключения) ==== -->
+    <string name="log_awgp_01">"Параметр обфускации "</string>
+    <string name="log_awgp_02">\" — не число 0..4294967295</string>
+    <string name="log_awgp_03">) больше Jmax (</string>
+    <string name="log_awgp_04">дефолт (без обфускации)</string>
+    <string name="log_awgp_05">"ключ должен быть 32 байта, получено "</string>
+    <string name="log_arun_01">start(): движок уже запущен — пропуск</string>
+    <string name="log_arun_02">движок поднят (handle=</string>
+    <string name="log_arun_03">движок остановлен (handle=</string>
+    <string name="log_arun_04">"ошибка остановки движка: "</string>
+    <string name="log_boot_01">Загрузка телефона</string>
+    <string name="log_boot_02">Перезапуск после падения процесса</string>
+    <string name="log_boot_03">Приложение обновлено (переустановлено)</string>
+    <string name="log_boot_04">: VPN не был подключён — не подключаю</string>
+    <string name="log_boot_05">": VPN был подключён — восстанавливаю (режим "</string>
+    <string name="log_boot_06">Согласие на VPN не выдано — не подключаю (подключите вручную)</string>
+    <string name="log_boot_07">"Не смог запустить сервис из фона: "</string>
+    <string name="log_svc_01">" — повторная попытка через "</string>
+    <string name="log_svc_02">" с"</string>
+    <string name="log_svc_03">VpnService не дал TUN (</string>
+    <string name="log_svc_04">") — повтор через "</string>
+    <string name="log_svc_05">" с (при загрузке телефона: ждём разблокировки экрана)"</string>
+    <string name="log_svc_06">ОШИБКА: VpnService не разрешил TUN (</string>
+    <string name="log_svc_07">VpnService не разрешил TUN</string>
+    <string name="log_svc_08">Падение процесса — будильник перезапуска VPN через ~3с</string>
+    <string name="log_svc_09">Отключение пользователем — восстановление при загрузке/падении выключено</string>
+    <string name="log_svc_10">Рестарт после падения: VPN до падения не работал — не подключаю</string>
+    <string name="log_svc_11">WireGuard: подробные строки движка показаны (фильтр снят)</string>
+    <string name="log_svc_12">WireGuard: подробные строки движка скрыты</string>
+    <string name="log_svc_13">AmneziaWG: подробные строки движка показаны (фильтр снят)</string>
+    <string name="log_svc_14">AmneziaWG: подробные строки движка скрыты</string>
+    <string name="log_svc_15">Xray перезапущен (loglevel=</string>
+    <string name="log_svc_16">), TUN не пересоздавался</string>
+    <string name="log_svc_17">"ОШИБКА перезапуска Xray: "</string>
+    <string name="log_svc_18">connect(): интерфейс уже существует — пропуск (</string>
+    <string name="log_svc_19">openvpn живой</string>
+    <string name="log_svc_20">openvpn не запущен</string>
+    <string name="log_svc_21">на момент подключения</string>
+    <string name="log_svc_22">"==== Подключение (режим: "</string>
+    <string name="log_svc_23">"ОШИБКА запуска Xray TUN: "</string>
+    <string name="log_svc_24">Сеть</string>
+    <string name="log_svc_25">VPN (наш tun)</string>
+    <string name="log_svc_26">мобильная сеть</string>
+    <string name="log_svc_27">сеть</string>
+    <string name="log_svc_28">Сети с интернетом нет (</string>
+    <string name="log_svc_29">") — TUN не поднимаю "</string>
+    <string name="log_svc_30">(значка ключа нет), движки выключены; подключусь сам при появлении интернета</string>
+    <string name="log_svc_31">"Сети с интернетом нет — держу туннель ещё "</string>
+    <string name="log_svc_32">"с (короткий обрыв переживёт), "</string>
+    <string name="log_svc_33">потом глушу до появления сети</string>
+    <string name="log_svc_34">" появилась, но интернет ещё не проверен — жду валидации"</string>
+    <string name="log_svc_35">" с интернетом — подключаюсь"</string>
+    <string name="log_svc_36">" вернулась — туннель работает"</string>
+    <string name="log_svc_37">"Сети нет уже "</string>
+    <string name="log_svc_38">"с — глушу туннель и движки до появления интернета "</string>
+    <string name="log_svc_39">(значок ключа исчезнет, батарея не тратится)</string>
+    <string name="log_svc_40">сеть пропала надолго</string>
+    <string name="log_svc_41">"Сеть доступна: "</string>
+    <string name="log_svc_42">" (есть интернет)"</string>
+    <string name="log_svc_43">" (без интернета)"</string>
+    <string name="log_svc_44">"Сеть потеряна: "</string>
+    <string name="log_svc_45">интерфейс исчез</string>
+    <string name="log_svc_46">Слежение за сетью включено (интернет появился → автоподключение)</string>
+    <string name="log_svc_47">"Слежение за сетью не зарегистрировано: "</string>
+    <string name="log_svc_48">SSH: не заданы хост/пользователь (Настройки → Настройки SSH)</string>
+    <string name="log_svc_49">"ОШИБКА: "</string>
+    <string name="log_svc_50">SSH-туннель готов, локальный форвард 127.0.0.1:</string>
+    <string name="log_svc_51">"ОШИБКА запуска OpenVPN (SSH-режим): "</string>
+    <string name="log_svc_52">"ОШИБКА SSH: "</string>
+    <string name="log_svc_53">WG: конфиг некорректен</string>
+    <string name="log_svc_54">" (Настройки → Настройки WireGuard)"</string>
+    <string name="log_svc_55">WG-конфиг: адресов=</string>
+    <string name="log_svc_56">WireGuard: туннель поднят</string>
+    <string name="log_svc_57">"ОШИБКА WG: "</string>
+    <string name="log_svc_58">"сеть недоступна (резолв endpoint'а)"</string>
+    <string name="log_svc_59">AWG: конфиг некорректен</string>
+    <string name="log_svc_60">" (Настройки → Настройки AmneziaWG)"</string>
+    <string name="log_svc_61">AWG-конфиг: адресов=</string>
+    <string name="log_svc_62">" обфускация jc="</string>
+    <string name="log_svc_63">AmneziaWG: туннель поднят</string>
+    <string name="log_svc_64">"ОШИБКА AWG: "</string>
+    <string name="log_svc_65">"WG-конфиг содержит "</string>
+    <string name="log_svc_66">" peer — в режиме через Xray используется только первый ("</string>
+    <string name="log_svc_67">WG-через-Xray: endpoint=</string>
+    <string name="log_svc_68">" адресов="</string>
+    <string name="log_svc_69">Старт WG-через-Xray отменён (состояние изменилось)</string>
+    <string name="log_svc_70">WG через Xray</string>
+    <string name="log_svc_71">"ОШИБКА запуска Xray (WG через Xray): "</string>
+    <string name="log_svc_72">Приложения: весь телефон (переключатель «VPN для всего телефона»)</string>
+    <string name="log_svc_73">Приложения: весь телефон (per-app список пуст)</string>
+    <string name="log_svc_74">"Per-app: выбранных приложений: "</string>
+    <string name="log_svc_75">"маршрут: "</string>
+    <string name="log_svc_76">сменилась сеть — перезапуск WG-туннеля</string>
+    <string name="log_svc_77">"NetworkCallback не зарегистрирован: "</string>
+    <string name="log_svc_78">OpenVPN завершился сам — VPN отключён</string>
+    <string name="log_svc_79">процесс openvpn завершился</string>
+    <string name="log_svc_80">TUN создан: ip=</string>
+    <string name="log_svc_81">" (смена состояния)"</string>
+    <string name="log_svc_82">"Маршрут сервера: "</string>
+    <string name="log_svc_83">==== Отключение ====</string>
+    <string name="log_svc_84">VPN отозван системой (onRevoke) — восстановление при загрузке/падении выключено</string>
+    <string name="log_logs_01">Подробный журнал включён</string>
+    <string name="log_logs_02">Подробный журнал выключен</string>
+    <string name="log_main_01">"ОШИБКА b64-декода: "</string>
+    <string name="log_main_02">Импорт настроек через intent (</string>
+    <string name="log_main_03">" байт)"</string>
+    <string name="log_main_04">"ОШИБКА intent-импорта: "</string>
+    <string name="log_main_05">VPN был подключён до перезапуска, но согласие на VPN не выдано — автоподключение пропущено</string>
+    <string name="log_main_06">"VPN был подключён до перезапуска приложения — восстанавливаю (режим "</string>
+    <string name="log_mgmt_01">"Сервер пушит DNS: "</string>
+    <string name="log_mgmt_02">"Сервер пушит маршрут: "</string>
+    <string name="log_mgmt_03">Сеть недоступна — hold не отпускаю, жду интернет</string>
+    <string name="log_mgmt_04">" (появится — подключусь сам)"</string>
+    <string name="log_mgmt_05">"Запрос пароля: "</string>
+    <string name="log_mgmt_06">TAP: TUN создан после IFCONFIG: ip=</string>
+    <string name="log_mgmt_07">"ОШИБКА привязки TUN в TAP: "</string>
+    <string name="log_mgmt_08">"Сервер пушит ROUTE: "</string>
+    <string name="log_mgmt_09">"IPv6-опция пропущена: "</string>
+    <string name="log_mgmt_10">TUN-fd диагностика: fd=</string>
+    <string name="log_mgmt_11">OPENTUN ok, TUN-fd передан, ip=</string>
+    <string name="log_mgmt_12">OPENTUN ok (tap): L2-пара передана, ждём IFCONFIG для создания TUN</string>
+    <string name="log_mgmt_13">" [auto: при неудаче ARP откат в tun]"</string>
+    <string name="log_mgmt_14">"ОШИБКА TAP OPENTUN: "</string>
+    <string name="log_mgmt_15">TAP-режим подтверждён (ARP-ответ шлюза)</string>
+    <string name="log_mgmt_16">TAP: ARP-ответ шлюза не получен — проверьте сервер/сеть</string>
+    <string name="log_orun_01">Обнаружен живой процесс openvpn — перезапуск с новым конфигом</string>
+    <string name="log_orun_02">Использую импортированный .ovpn (raw-конфиг)</string>
+    <string name="log_orun_03">SSH-форвард: remote → 127.0.0.1:</string>
+    <string name="log_orun_04">, proto tcp (ретраи на время реконнекта SSH)</string>
+    <string name="log_orun_05">"Режим интерфейса сервера: "</string>
+    <string name="log_orun_06">" (из директивы dev конфига)"</string>
+    <string name="log_orun_07">Запуск OpenVPN, remote=</string>
+    <string name="log_orun_08">"Конфиг:\n"</string>
+    <string name="log_orun_09">"ОШИБКА: нативный бинарник openvpn недоступен: "</string>
+    <string name="log_orun_10">Процесс openvpn завершился, код=</string>
+    <string name="log_orun_11">Процесс openvpn запущен</string>
+    <string name="log_orun_12">"Ошибка остановки OpenVPN: "</string>
+    <string name="log_orun_13">OpenVPN остановлен</string>
+    <string name="log_qr_01">StreamConfigurationMap недоступен</string>
+    <string name="log_qr_02">"камера "</string>
+    <string name="log_qr_03">", кадр анализа "</string>
+    <string name="log_qr_04">", сенсор "</string>
+    <string name="log_qr_05">сессия камеры готова</string>
+    <string name="log_qr_06">ОШИБКА: сессия камеры не настроилась</string>
+    <string name="log_qr_07">"фонарик: "</string>
+    <string name="log_qr_08">вкл</string>
+    <string name="log_qr_09">выкл</string>
+    <string name="log_qr_10">"фонарик недоступен: "</string>
+    <string name="log_qr_11">кадр #</string>
+    <string name="log_qr_12">"ошибка декода: "</string>
+    <string name="log_qr_13">QR распознан (</string>
+    <string name="log_qr_14">" симв.)"</string>
+    <string name="log_ssh_01">SSH-сессия восстановлена, форвард 127.0.0.1:</string>
+    <string name="log_ssh_02">SSH-сессия оборвалась</string>
+    <string name="log_ssh_03">"Ошибка SSH: "</string>
+    <string name="log_ssh_04">"Повтор через "</string>
+    <string name="log_ssh_05">"с (попытка "</string>
+    <string name="log_ssh_06">"Не удалось прочитать приватный ключ SSH "</string>
+    <string name="log_ssh_07">"(проверьте ключ и пароль ключа в настройках): "</string>
+    <string name="log_ssh_08">Аутентификация: приватный ключ</string>
+    <string name="log_ssh_09">"Подключение к "</string>
+    <string name="log_ssh_10">Аутентификация SSH не удалась (</string>
+    <string name="log_ssh_11">). Проверьте логин/пароль/ключ в настройках SSH.</string>
+    <string name="log_ssh_12">"Отпечаток хост-ключа сохранён (TOFU): "</string>
+    <string name="log_ssh_13">"Отпечаток SSH-хоста ИЗМЕНИЛСЯ (было: "</string>
+    <string name="log_ssh_14">", стало: "</string>
+    <string name="log_ssh_15">"). Возможен MITM или переустановка сервера. "</string>
+    <string name="log_ssh_16">Если сервер менялся намеренно — сбросьте отпечаток в настройках SSH.</string>
+    <string name="log_ssh_17">"Не удалось занять локальный порт "</string>
+    <string name="log_ssh_18">SSH-сессия установлена; форвард 127.0.0.1:</string>
+    <string name="log_ssh_19">"protect(fd) не удался: "</string>
+    <string name="log_tap_01">TUN привязан к шиму</string>
+    <string name="log_tap_02">Сеть получена: ip=</string>
+    <string name="log_tap_03">" маска="</string>
+    <string name="log_tap_04">" шлюз="</string>
+    <string name="log_tap_05">Старт (L2-пара активна): mac=</string>
+    <string name="log_tap_06">" (сеть придёт из IFCONFIG)"</string>
+    <string name="log_tap_07">" [TUN уже привязан]"</string>
+    <string name="log_tap_08">" — ARP-детект tap-сервера"</string>
+    <string name="log_tap_09">"Ошибка TUN-чтения: "</string>
+    <string name="log_tap_10">"Ошибка чтения L2-пары: "</string>
+    <string name="log_tap_11">"ARP-ответ от "</string>
+    <string name="log_tap_12">) — сервер TAP подтверждён</string>
+    <string name="log_tap_13">IFCONFIG не получен за 15с — откат из TAP</string>
+    <string name="log_tap_14">" не получен за "</string>
+    <string name="log_tap_15">с — сервер, вероятно, не TAP</string>
+    <string name="log_xcb_01">Конфиг WireGuard некорректен</string>
+    <string name="log_xcb_02">В конфиге WireGuard не задан Endpoint peer</string>
+    <string name="log_xrun_01">Запуск Xray (TUN), fd=</string>
+    <string name="log_xrun_02">Xray TUN запущен, version=</string>
+    <string name="log_xrun_03">Запуск Xray (TUN+WG), fd=</string>
+    <string name="log_xrun_04">Xray TUN+WG запущен, version=</string>
+    <string name="log_xrun_05">ОШИБКА: custom-конфиг пуст</string>
+    <string name="log_xrun_06">Пустой custom-конфиг Xray (заполните в настройках)</string>
+    <string name="log_xrun_07">"ОШИБКА: невалидный JSON: "</string>
+    <string name="log_xrun_08">"Невалидный JSON в custom-конфиге: "</string>
+    <string name="log_xrun_09">ОШИБКА: в custom-конфиге нет outbounds</string>
+    <string name="log_xrun_10">В custom-конфиге нет outbounds</string>
+    <string name="log_xrun_11">Запуск Xray (custom), fd=</string>
+    <string name="log_xrun_12">Xray custom запущен, version=</string>
+    <string name="log_xrun_13">Запуск Xray (SOCKS) на 127.0.0.1:</string>
+    <string name="log_xrun_14">Xray SOCKS запущен, version=</string>
+    <string name="log_xrun_15">"Ошибка остановки Xray: "</string>
+    <string name="log_xrun_16">Xray остановлен</string>
 </resources>

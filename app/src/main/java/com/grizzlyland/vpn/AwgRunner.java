@@ -48,7 +48,7 @@ public class AwgRunner {
      */
     public synchronized void start(int tunFd, String ipcConfig) {
         if (handle != -1) {
-            LogStore.add("Awg", "start(): движок уже запущен — пропуск");
+            LogStore.add("Awg", L10n.s(R.string.log_arun_01));
             return;
         }
         Thread t = new Thread(() -> {
@@ -65,7 +65,7 @@ public class AwgRunner {
                 if (fd6 > 0) {
                     protect.accept(fd6);
                 }
-                LogStore.add("Awg", "движок поднят (handle=" + h + ", udp4 fd=" + fd4
+                LogStore.add("Awg", L10n.s(R.string.log_arun_02) + h + ", udp4 fd=" + fd4
                         + ", udp6 fd=" + fd6 + ")");
                 listener.onUp();
             } catch (Exception e) {
@@ -134,10 +134,10 @@ public class AwgRunner {
         }
         try {
             Libxray.awgTurnOff(h);
-            LogStore.add("Awg", "движок остановлен (handle=" + h + ")");
+            LogStore.add("Awg", L10n.s(R.string.log_arun_03) + h + ")");
         } catch (Exception e) {
             Log.e("AwgRunner", "turnOff failed", e);
-            LogStore.add("Awg", "ошибка остановки движка: " + e);
+            LogStore.add("Awg", L10n.s(R.string.log_arun_04) + e);
         } finally {
             drainLogs();
         }

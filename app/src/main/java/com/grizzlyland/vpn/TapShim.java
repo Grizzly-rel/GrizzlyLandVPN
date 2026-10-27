@@ -113,7 +113,7 @@ public class TapShim {
         tToTap = new Thread(this::toTapLoop, "tapshim-to");
         tToTap.setDaemon(true);
         tToTap.start();
-        LogStore.add("TapShim", "TUN привязан к шиму");
+        LogStore.add("TapShim", L10n.s(R.string.log_tap_01));
     }
 
     public boolean hasTun() {
@@ -136,8 +136,8 @@ public class TapShim {
             }
             gatewayIp = computeGateway(ip, netmask);
             detectStartedAt = System.currentTimeMillis();
-            LogStore.add("TapShim", "Сеть получена: ip=" + ip + " маска=" + netmask
-                    + " шлюз=" + gatewayIp + " mac=" + macToString(myMac));
+            LogStore.add("TapShim", L10n.s(R.string.log_tap_02) + ip + L10n.s(R.string.log_tap_03) + netmask
+                    + L10n.s(R.string.log_tap_04) + gatewayIp + " mac=" + macToString(myMac));
         }
         return gatewayIp;
     }
@@ -189,9 +189,9 @@ public class TapShim {
         }
         tFromTap.start();
         tTimer.start();
-        LogStore.add("TapShim", "Старт (L2-пара активна): mac=" + macToString(myMac)
-                + (myIp != null ? " ip=" + myIp + " шлюз=" + gatewayIp : " (сеть придёт из IFCONFIG)")
-                + (tunPfd != null ? " [TUN уже привязан]" : "") + " — ARP-детект tap-сервера");
+        LogStore.add("TapShim", L10n.s(R.string.log_tap_05) + macToString(myMac)
+                + (myIp != null ? " ip=" + myIp + L10n.s(R.string.log_tap_04) + gatewayIp : L10n.s(R.string.log_tap_06))
+                + (tunPfd != null ? L10n.s(R.string.log_tap_07) : "") + L10n.s(R.string.log_tap_08));
     }
 
     public void stop() {
@@ -247,7 +247,7 @@ public class TapShim {
             // EBADF после close() — штатная остановка
             if (running) {
                 Log.e(TAG, "toTap read/write failed", e);
-                LogStore.add("TapShim", "Ошибка TUN-чтения: " + e.getMessage());
+                LogStore.add("TapShim", L10n.s(R.string.log_tap_09) + e.getMessage());
             }
         } catch (Exception e) {
             if (running) {
@@ -324,7 +324,7 @@ public class TapShim {
             // EBADF после close() — штатная остановка
             if (running) {
                 Log.e(TAG, "fromTap read/write failed", e);
-                LogStore.add("TapShim", "Ошибка чтения L2-пары: " + e.getMessage());
+                LogStore.add("TapShim", L10n.s(R.string.log_tap_10) + e.getMessage());
             }
         } catch (Exception e) {
             if (running) {
@@ -357,8 +357,8 @@ public class TapShim {
                 flushPending(spa);
                 if (isNew && spa == ipToInt(gatewayIp) && !confirmed) {
                     confirmed = true;
-                    LogStore.add("TapShim", "ARP-ответ от " + gatewayIp + " ("
-                            + macToString(sha) + ") — сервер TAP подтверждён");
+                    LogStore.add("TapShim", L10n.s(R.string.log_tap_11) + gatewayIp + " ("
+                            + macToString(sha) + L10n.s(R.string.log_tap_12));
                     if (listener != null) {
                         listener.onTapConfirmed();
                     }
@@ -476,7 +476,7 @@ public class TapShim {
                     if (now - t0 > NO_NETWORK_TIMEOUT_MS) {
                         if (!failedReported && listener != null) {
                             failedReported = true;
-                            LogStore.add("TapShim", "IFCONFIG не получен за 15с — откат из TAP");
+                            LogStore.add("TapShim", L10n.s(R.string.log_tap_13));
                             listener.onTapFailed();
                         }
                         return;
@@ -490,9 +490,9 @@ public class TapShim {
                 if (detectStartedAt > 0 && now - detectStartedAt > DETECT_TIMEOUT_MS) {
                     if (!failedReported && listener != null) {
                         failedReported = true;
-                        LogStore.add("TapShim", "ARP-ответ от " + gatewayIp
-                                + " не получен за " + (DETECT_TIMEOUT_MS / 1000)
-                                + "с — сервер, вероятно, не TAP");
+                        LogStore.add("TapShim", L10n.s(R.string.log_tap_11) + gatewayIp
+                                + L10n.s(R.string.log_tap_14) + (DETECT_TIMEOUT_MS / 1000)
+                                + L10n.s(R.string.log_tap_15));
                         listener.onTapFailed();
                     }
                     return;

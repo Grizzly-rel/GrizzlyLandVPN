@@ -32,6 +32,7 @@ public class SettingsActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        L10n.init(this);
         config = new ConfigManager(this);
 
         LinearLayout root = new LinearLayout(this);

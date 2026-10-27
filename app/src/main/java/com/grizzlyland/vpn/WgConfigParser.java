@@ -217,7 +217,7 @@ public class WgConfigParser {
     private static String b64ToHex(String b64) {
         byte[] raw = android.util.Base64.decode(b64.trim(), android.util.Base64.DEFAULT);
         if (raw.length != 32) {
-            throw new IllegalArgumentException("ключ должен быть 32 байта, получено "
+            throw new IllegalArgumentException(L10n.s(R.string.log_awgp_05)
                     + raw.length);
         }
         StringBuilder sb = new StringBuilder(64);

@@ -93,6 +93,7 @@ public class QrScanActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        L10n.init(this);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
@@ -225,7 +226,7 @@ public class QrScanActivity extends Activity {
             android.hardware.camera2.params.StreamConfigurationMap map =
                     cc.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
             if (map == null) {
-                throw new IllegalStateException("StreamConfigurationMap недоступен");
+                throw new IllegalStateException(L10n.s(R.string.log_qr_01));
             }
             android.util.Size analysisSize = pickAnalysisSize(
                     map.getOutputSizes(ImageFormat_YUV()));
@@ -234,9 +235,9 @@ public class QrScanActivity extends Activity {
             if (so != null) {
                 sensorOrientation = so;
             }
-            LogStore.add("QR", "камера " + cameraId + ", кадр анализа "
+            LogStore.add("QR", L10n.s(R.string.log_qr_02) + cameraId + L10n.s(R.string.log_qr_03)
                     + analysisSize.getWidth() + "x" + analysisSize.getHeight()
-                    + ", сенсор " + sensorOrientation + "°");
+                    + L10n.s(R.string.log_qr_04) + sensorOrientation + "°");
             // Размер превью из SurfaceTexture берём тот же (упрощает сессию).
             cameraThread = new HandlerThread("qr-cam");
             cameraThread.start();
@@ -368,7 +369,7 @@ public class QrScanActivity extends Activity {
                         return;
                     }
                     session = s;
-                    LogStore.add("QR", "сессия камеры готова");
+                    LogStore.add("QR", L10n.s(R.string.log_qr_05));
                     try {
                         CaptureRequest.Builder req = cameraDevice
                                 .createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
@@ -388,7 +389,7 @@ public class QrScanActivity extends Activity {
                 }
                 @Override
                 public void onConfigureFailed(CameraCaptureSession s) {
-                    LogStore.add("QR", "ОШИБКА: сессия камеры не настроилась");
+                    LogStore.add("QR", L10n.s(R.string.log_qr_06));
                     if (!finished) {
                         Toast.makeText(QrScanActivity.this, getString(R.string.toast_cam_session_failed),
                                 Toast.LENGTH_LONG).show();
@@ -418,10 +419,10 @@ public class QrScanActivity extends Activity {
             } else if (cameraId != null) {
                 cameraManager.setTorchMode(cameraId, torchOn);
             }
-            LogStore.add("QR", "фонарик: " + (torchOn ? "вкл" : "выкл"));
+            LogStore.add("QR", L10n.s(R.string.log_qr_07) + (torchOn ? L10n.s(R.string.log_qr_08) : L10n.s(R.string.log_qr_09)));
         } catch (Exception e) {
             torchOn = false;
-            LogStore.add("QR", "фонарик недоступен: " + e.getMessage());
+            LogStore.add("QR", L10n.s(R.string.log_qr_10) + e.getMessage());
             Toast.makeText(this, getString(R.string.toast_torch_error, e.getMessage()), Toast.LENGTH_SHORT).show();
         }
     }
@@ -453,18 +454,18 @@ public class QrScanActivity extends Activity {
             String result = null;
             try {
                 if (frameNo % 50 == 1) {
-                    LogStore.add("QR", "кадр #" + frameNo + " "
+                    LogStore.add("QR", L10n.s(R.string.log_qr_11) + frameNo + " "
                             + image.getWidth() + "x" + image.getHeight());
                 }
                 result = decode(image);
             } catch (Throwable t) {
-                LogStore.add("QR", "ошибка декода: " + t);
+                LogStore.add("QR", L10n.s(R.string.log_qr_12) + t);
             } finally {
                 image.close();
                 busy = false;
             }
             if (result != null && !finished) {
-                LogStore.add("QR", "QR распознан (" + result.length() + " симв.)");
+                LogStore.add("QR", L10n.s(R.string.log_qr_13) + result.length() + L10n.s(R.string.log_qr_14));
                 final String decoded = result;
                 runOnUiThread(() -> onDecoded(decoded));
             }

@@ -53,13 +53,13 @@ public class XrayRunner {
         Libxray.setTunFd(tunFd);
         String json = XrayConfigBuilder.buildTun(config, logDir);
         Log.i(TAG, "Starting Xray (TUN mode), fd=" + tunFd + " config:\n" + json);
-        LogStore.add("Xray", "Запуск Xray (TUN), fd=" + tunFd);
-        LogStore.add("Xray", "Конфиг:\n" + json);
+        LogStore.add("Xray", L10n.s(R.string.log_xrun_01) + tunFd);
+        LogStore.add("Xray", L10n.s(R.string.log_orun_08) + json);
         Libxray.run(json);
         running = true;
         startLogTailer(logDir, config.getLogDebug());
         Log.i(TAG, "Xray TUN started, version=" + Libxray.version());
-        LogStore.add("Xray", "Xray TUN запущен, version=" + Libxray.version());
+        LogStore.add("Xray", L10n.s(R.string.log_xrun_02) + Libxray.version());
     }
 
     /**
@@ -77,13 +77,13 @@ public class XrayRunner {
         Libxray.setTunFd(tunFd);
         String json = XrayConfigBuilder.buildTunWg(config, logDir);
         Log.i(TAG, "Starting Xray (TUN+WG mode), fd=" + tunFd + " config:\n" + json);
-        LogStore.add("Xray", "Запуск Xray (TUN+WG), fd=" + tunFd);
-        LogStore.add("Xray", "Конфиг:\n" + json);
+        LogStore.add("Xray", L10n.s(R.string.log_xrun_03) + tunFd);
+        LogStore.add("Xray", L10n.s(R.string.log_orun_08) + json);
         Libxray.run(json);
         running = true;
         startLogTailer(logDir, config.getLogDebug());
         Log.i(TAG, "Xray TUN+WG started, version=" + Libxray.version());
-        LogStore.add("Xray", "Xray TUN+WG запущен, version=" + Libxray.version());
+        LogStore.add("Xray", L10n.s(R.string.log_xrun_04) + Libxray.version());
     }
 
     /**
@@ -99,20 +99,20 @@ public class XrayRunner {
         resetLogFiles(logDir);
         String raw = config.getXrayCustomJson();
         if (raw == null || raw.trim().isEmpty()) {
-            LogStore.add("Xray", "ОШИБКА: custom-конфиг пуст");
-            throw new IllegalArgumentException("Пустой custom-конфиг Xray (заполните в настройках)");
+            LogStore.add("Xray", L10n.s(R.string.log_xrun_05));
+            throw new IllegalArgumentException(L10n.s(R.string.log_xrun_06));
         }
         JSONObject o;
         try {
             o = new JSONObject(raw);
         } catch (Exception e) {
-            LogStore.add("Xray", "ОШИБКА: невалидный JSON: " + e.getMessage());
-            throw new IllegalArgumentException("Невалидный JSON в custom-конфиге: " + e.getMessage());
+            LogStore.add("Xray", L10n.s(R.string.log_xrun_07) + e.getMessage());
+            throw new IllegalArgumentException(L10n.s(R.string.log_xrun_08) + e.getMessage());
         }
         JSONArray outbounds = o.optJSONArray("outbounds");
         if (outbounds == null || outbounds.length() == 0) {
-            LogStore.add("Xray", "ОШИБКА: в custom-конфиге нет outbounds");
-            throw new IllegalArgumentException("В custom-конфиге нет outbounds");
+            LogStore.add("Xray", L10n.s(R.string.log_xrun_09));
+            throw new IllegalArgumentException(L10n.s(R.string.log_xrun_10));
         }
 
         // Подменяем inbounds на tun-вход (трафик из VPN-интерфейса).
@@ -143,13 +143,13 @@ public class XrayRunner {
         Libxray.setTunFd(tunFd);
         String json = o.toString(2);
         Log.i(TAG, "Starting Xray (CUSTOM mode), fd=" + tunFd + " config:\n" + json);
-        LogStore.add("Xray", "Запуск Xray (custom), fd=" + tunFd);
-        LogStore.add("Xray", "Конфиг:\n" + json);
+        LogStore.add("Xray", L10n.s(R.string.log_xrun_11) + tunFd);
+        LogStore.add("Xray", L10n.s(R.string.log_orun_08) + json);
         Libxray.run(json);
         running = true;
         startLogTailer(logDir, config.getLogDebug());
         Log.i(TAG, "Xray CUSTOM started, version=" + Libxray.version());
-        LogStore.add("Xray", "Xray custom запущен, version=" + Libxray.version());
+        LogStore.add("Xray", L10n.s(R.string.log_xrun_12) + Libxray.version());
     }
 
     /** Запуск Xray в SOCKS-режиме (локальный прокси для OpenVPN). */
@@ -160,13 +160,13 @@ public class XrayRunner {
         resetLogFiles(logDir);
         String json = XrayConfigBuilder.build(config, logDir);
         Log.i(TAG, "Starting Xray (SOCKS mode) config:\n" + json);
-        LogStore.add("Xray", "Запуск Xray (SOCKS) на 127.0.0.1:" + config.getXraySocksPort());
-        LogStore.add("Xray", "Конфиг:\n" + json);
+        LogStore.add("Xray", L10n.s(R.string.log_xrun_13) + config.getXraySocksPort());
+        LogStore.add("Xray", L10n.s(R.string.log_orun_08) + json);
         Libxray.run(json);
         running = true;
         startLogTailer(logDir, config.getLogDebug());
         Log.i(TAG, "Xray SOCKS started, version=" + Libxray.version());
-        LogStore.add("Xray", "Xray SOCKS запущен, version=" + Libxray.version());
+        LogStore.add("Xray", L10n.s(R.string.log_xrun_14) + Libxray.version());
     }
 
     public synchronized void stop() {
@@ -178,11 +178,11 @@ public class XrayRunner {
             Libxray.stop();
         } catch (Throwable t) {
             Log.e(TAG, "Error stopping Xray", t);
-            LogStore.add("Xray", "Ошибка остановки Xray: " + t);
+            LogStore.add("Xray", L10n.s(R.string.log_xrun_15) + t);
         }
         running = false;
         Log.i(TAG, "Xray stopped");
-        LogStore.add("Xray", "Xray остановлен");
+        LogStore.add("Xray", L10n.s(R.string.log_xrun_16));
     }
 
     public String version() {

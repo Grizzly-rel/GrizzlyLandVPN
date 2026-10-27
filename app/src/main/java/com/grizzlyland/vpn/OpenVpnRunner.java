@@ -80,7 +80,7 @@ public class OpenVpnRunner {
             // Ранее здесь был тихий return: после смены режима/настроек при живом
             // старом процессе новый конфиг (например с socks-proxy) не применялся,
             // и openvpn продолжал работать со СТАРЫМ конфигом. Теперь перезапускаем.
-            LogStore.add("OpenVPN", "Обнаружен живой процесс openvpn — перезапуск с новым конфигом");
+            LogStore.add("OpenVPN", L10n.s(R.string.log_orun_01));
             stop();
         }
         intentionalStop = false;
@@ -113,7 +113,7 @@ public class OpenVpnRunner {
         String raw = config.getOvpnRaw();
         if (raw != null && !raw.trim().isEmpty()) {
             cfg = OpenVpnConfigBuilder.prepareForRun(raw, config, socksProxy);
-            LogStore.add("OpenVPN", "Использую импортированный .ovpn (raw-конфиг)");
+            LogStore.add("OpenVPN", L10n.s(R.string.log_orun_02));
         } else {
             cfg = OpenVpnConfigBuilder.build(config, keyPath, caPath, certPath, keyFilePath, socksProxy);
         }
@@ -121,23 +121,23 @@ public class OpenVpnRunner {
         // SSH-форвард (порт сообщает GrizzlyLandVpnService после подъёма туннеля).
         if (sshLocalPort > 0) {
             cfg = OpenVpnConfigBuilder.patchSshLocal(cfg, sshLocalPort);
-            LogStore.add("OpenVPN", "SSH-форвард: remote → 127.0.0.1:" + sshLocalPort
-                    + ", proto tcp (ретраи на время реконнекта SSH)");
+            LogStore.add("OpenVPN", L10n.s(R.string.log_orun_03) + sshLocalPort
+                    + L10n.s(R.string.log_orun_04));
         }
         // Режим интерфейса СЕРВЕРА — из самого конфига: "dev tap…" → L2-пара и
         // TapShim (бриджевый сервер), "dev tun*" → обычный L3. Авто-детекта нет.
         boolean tap = OpenVpnConfigBuilder.isTapConfig(cfg);
         String linkMode = tap ? "tap" : "tun";
-        LogStore.add("OpenVPN", "Режим интерфейса сервера: " + linkMode
-                + " (из директивы dev конфига)");
+        LogStore.add("OpenVPN", L10n.s(R.string.log_orun_05) + linkMode
+                + L10n.s(R.string.log_orun_06));
         File cfgFile = new File(dir, "client.ovpn");
         writeFile(cfgFile, cfg);
         Log.i(TAG, "OpenVPN config:\n" + cfg);
-        LogStore.add("OpenVPN", "Запуск OpenVPN, remote=" + config.getOvpnRemoteHost()
+        LogStore.add("OpenVPN", L10n.s(R.string.log_orun_07) + config.getOvpnRemoteHost()
                 + ":" + config.getOvpnRemotePort()
                 + " proto=" + config.getOvpnProtocol()
                 + (socksProxy != null ? " via " + socksProxy : ""));
-        LogStore.add("OpenVPN", "Конфиг:\n" + cfg);
+        LogStore.add("OpenVPN", L10n.s(R.string.log_orun_08) + cfg);
 
         // Поднимаем management-интерфейс (UNIX-сокет) до старта openvpn.
         managementThread = new OpenVpnManagementThread(context, tunProvider, protectCallback,
@@ -150,7 +150,7 @@ public class OpenVpnRunner {
         File binary = new File(context.getApplicationInfo().nativeLibraryDir, BINARY_NAME);
         if (!binary.exists() || !binary.canExecute()) {
             Log.e(TAG, "native openvpn binary not found/executable: " + binary);
-            LogStore.add("OpenVPN", "ОШИБКА: нативный бинарник openvpn недоступен: " + binary);
+            LogStore.add("OpenVPN", L10n.s(R.string.log_orun_09) + binary);
             throw new IllegalStateException("openvpn binary unavailable: " + binary);
         }
 
@@ -206,7 +206,7 @@ public class OpenVpnRunner {
         Thread watcher = new Thread(() -> {
             try {
                 int code = proc.waitFor();
-                LogStore.add("OpenVPN", "Процесс openvpn завершился, код=" + code);
+                LogStore.add("OpenVPN", L10n.s(R.string.log_orun_10) + code);
             } catch (InterruptedException e) {
                 return;
             }
@@ -222,7 +222,7 @@ public class OpenVpnRunner {
         watcher.start();
 
         Log.i(TAG, "OpenVPN started, mgmt socket=" + mgmtSocket);
-        LogStore.add("OpenVPN", "Процесс openvpn запущен");
+        LogStore.add("OpenVPN", L10n.s(R.string.log_orun_11));
     }
 
     public synchronized void stop() {
@@ -241,12 +241,12 @@ public class OpenVpnRunner {
             }
         } catch (Exception e) {
             Log.e(TAG, "Error stopping OpenVPN", e);
-            LogStore.add("OpenVPN", "Ошибка остановки OpenVPN: " + e);
+            LogStore.add("OpenVPN", L10n.s(R.string.log_orun_12) + e);
         }
         process = null;
         running = false;
         Log.i(TAG, "OpenVPN stopped");
-        LogStore.add("OpenVPN", "OpenVPN остановлен");
+        LogStore.add("OpenVPN", L10n.s(R.string.log_orun_13));
     }
 
     private String writeText(File dir, String name, String content) {

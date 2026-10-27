@@ -69,9 +69,9 @@ public class XrayConfigBuilder {
         try {
             WgConfigParser.WgConfig wg = WgConfigParser.parse(c.getWgRaw());
             if (!wg.valid) {
-                throw new IllegalStateException("Конфиг WireGuard некорректен"
+                throw new IllegalStateException(L10n.s(R.string.log_xcb_01)
                         + (wg.parseError.isEmpty() ? "" : (": " + wg.parseError))
-                        + " (Настройки → Настройки WireGuard)");
+                        + L10n.s(R.string.log_svc_54));
             }
 
             JSONObject o = baseConfig(c, logDir);
@@ -136,7 +136,7 @@ public class XrayConfigBuilder {
     private static JSONObject wgOutbound(WgConfigParser.WgConfig wg, ConfigManager c) throws JSONException {
         WgConfigParser.PeerInfo peer = wg.peerList.get(0);
         if (peer.endpoint.isEmpty()) {
-            throw new IllegalStateException("В конфиге WireGuard не задан Endpoint peer");
+            throw new IllegalStateException(L10n.s(R.string.log_xcb_02));
         }
         // Endpoint оставляем КАК В КОНФИГЕ (домен или IP): домен резолвит сам Xray
         // через свой DNS-модуль (запросы идут через proxy — см. правило

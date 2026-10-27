@@ -248,23 +248,23 @@ public class AwgConfigParser {
         String[] vals = {c.jc, c.jmin, c.jmax, c.s1, c.s2};
         for (int i = 0; i < names.length; i++) {
             if (!validU32(vals[i])) {
-                return "Параметр обфускации " + names[i] + "=\"" + vals[i]
-                        + "\" — не число 0..4294967295";
+                return L10n.s(R.string.log_awgp_01) + names[i] + "=\"" + vals[i]
+                        + L10n.s(R.string.log_awgp_02);
             }
         }
         String[] hn = {"h1", "h2", "h3", "h4"};
         String[] hv = {c.h1, c.h2, c.h3, c.h4};
         for (int i = 0; i < hn.length; i++) {
             if (!validU32(hv[i])) {
-                return "Параметр обфускации " + hn[i] + "=\"" + hv[i]
-                        + "\" — не число 0..4294967295";
+                return L10n.s(R.string.log_awgp_01) + hn[i] + "=\"" + hv[i]
+                        + L10n.s(R.string.log_awgp_02);
             }
         }
         try {
             long jmin = Long.parseLong(c.jmin);
             long jmax = Long.parseLong(c.jmax);
             if (jmin > jmax) {
-                return "Jmin (" + c.jmin + ") больше Jmax (" + c.jmax + ")";
+                return "Jmin (" + c.jmin + L10n.s(R.string.log_awgp_03) + c.jmax + ")";
             }
         } catch (NumberFormatException ignored) {
         }
@@ -299,7 +299,7 @@ public class AwgConfigParser {
                 && c.h1.equals(DEF_H1) && c.h2.equals(DEF_H2)
                 && c.h3.equals(DEF_H3) && c.h4.equals(DEF_H4);
         if (def) {
-            return "дефолт (без обфускации)";
+            return L10n.s(R.string.log_awgp_04);
         }
         return "jc=" + c.jc + " jmin=" + c.jmin + " jmax=" + c.jmax
                 + " s1=" + c.s1 + " s2=" + c.s2
@@ -313,7 +313,7 @@ public class AwgConfigParser {
     private static String b64ToHex(String b64) {
         byte[] raw = android.util.Base64.decode(b64.trim(), android.util.Base64.DEFAULT);
         if (raw.length != 32) {
-            throw new IllegalArgumentException("ключ должен быть 32 байта, получено "
+            throw new IllegalArgumentException(L10n.s(R.string.log_awgp_05)
                     + raw.length);
         }
         StringBuilder sb = new StringBuilder(64);

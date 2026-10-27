@@ -29,16 +29,16 @@ public class MainActivity extends Activity {
                 importJson = new String(android.util.Base64.decode(
                         b64.replaceAll("\\s", ""), android.util.Base64.NO_WRAP), "UTF-8");
             } catch (Exception e) {
-                LogStore.add("Settings", "ОШИБКА b64-декода: " + e);
+                LogStore.add("Settings", L10n.s(R.string.log_main_01) + e);
             }
         }
         if (importJson != null && !importJson.isEmpty()) {
             try {
                 new ConfigManager(this).importJson(importJson);
-                LogStore.add("Settings", "Импорт настроек через intent (" + importJson.length() + " байт)");
+                LogStore.add("Settings", L10n.s(R.string.log_main_02) + importJson.length() + L10n.s(R.string.log_main_03));
                 android.widget.Toast.makeText(this, getString(R.string.toast_settings_imported), android.widget.Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
-                LogStore.add("Settings", "ОШИБКА intent-импорта: " + e);
+                LogStore.add("Settings", L10n.s(R.string.log_main_04) + e);
             }
         }
     }
@@ -53,6 +53,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        L10n.init(this);
 
         // Android 13+ (API 33): уведомления скрыты без runtime-разрешения. Без него
         // юзер не увидит уведомление VPN с кнопкой «Отключить» (сам сервис при этом
@@ -163,10 +164,10 @@ public class MainActivity extends Activity {
         // (после полного удаления+установки согласие сбрасывается) — юзер
         // нажмёт «Подключить» и выдаст его через системный диалог.
         if (VpnService.prepare(this) != null) {
-            LogStore.add("Main", "VPN был подключён до перезапуска, но согласие на VPN не выдано — автоподключение пропущено");
+            LogStore.add("Main", L10n.s(R.string.log_main_05));
             return;
         }
-        LogStore.add("Main", "VPN был подключён до перезапуска приложения — восстанавливаю (режим " + config.getMode() + ")");
+        LogStore.add("Main", L10n.s(R.string.log_main_06) + config.getMode() + ")");
         startVpn();
     }
 

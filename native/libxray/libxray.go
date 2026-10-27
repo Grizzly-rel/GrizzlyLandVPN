@@ -12,6 +12,28 @@ import (
 
 var instance *core.Instance
 
+// ---- Локализация ошибок обёртки (наш код; ядро xray-core не переводим) ----
+// Язык выставляется из Java при старте приложения (L10n.init → Libxray.setLang):
+// "ru" — русский, любой другой — английский (дефолт).
+var lang = "en"
+
+// SetLang задаёт язык текстов ошибок обёртки ("ru" или "en").
+func SetLang(l string) {
+	if l == "ru" {
+		lang = "ru"
+	} else {
+		lang = "en"
+	}
+}
+
+// tr выбирает текст ошибки по текущему языку.
+func tr(ru, en string) string {
+	if lang == "ru" {
+		return ru
+	}
+	return en
+}
+
 // SetTunFd передаёт файловый дескриптор TUN (созданный Android VpnService)
 // в ядро Xray через env-переменную xray.tun.fd. Вызывать до Run().
 func SetTunFd(fd int) {

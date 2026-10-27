@@ -29,6 +29,7 @@ public class LogsActivity extends Activity implements LogStore.Listener {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        L10n.init(this);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -131,7 +132,7 @@ public class LogsActivity extends Activity implements LogStore.Listener {
     private void toggleDebug() {
         boolean on = !config.getLogDebug();
         config.setLogDebug(on);
-        LogStore.add("Log", on ? "Подробный журнал включён" : "Подробный журнал выключен");
+        LogStore.add("Log", on ? L10n.s(R.string.log_logs_01) : L10n.s(R.string.log_logs_02));
         updateDebugButton();
         GrizzlyLandVpnService.requestSetDebug(this);
     }

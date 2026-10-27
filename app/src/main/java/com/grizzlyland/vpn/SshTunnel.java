@@ -155,7 +155,7 @@ public class SshTunnel {
                     readyReported = true;
                     listener.onReady(bound);
                 } else {
-                    LogStore.add("SSH", "SSH-сессия восстановлена, форвард 127.0.0.1:" + bound);
+                    LogStore.add("SSH", L10n.s(R.string.log_ssh_01) + bound);
                 }
                 // Ждём разрыва сессии (ServerAliveInterval сам её закроет при смерти сети).
                 Session s = session;
@@ -165,7 +165,7 @@ public class SshTunnel {
                 if (!running) {
                     break;
                 }
-                LogStore.add("SSH", "SSH-сессия оборвалась");
+                LogStore.add("SSH", L10n.s(R.string.log_ssh_02));
             } catch (PermanentException pe) {
                 // Ретраить бессмысленно: неверный логин/пароль/ключ или смена хост-ключа.
                 LogStore.add("SSH", pe.getMessage());
@@ -177,13 +177,13 @@ public class SshTunnel {
                 if (!running) {
                     break;
                 }
-                LogStore.add("SSH", "Ошибка SSH: " + e);
+                LogStore.add("SSH", L10n.s(R.string.log_ssh_03) + e);
             }
             // Сетевые ошибки ретраятся бесконечно: пропажа интернета, смена
             // Wi-Fi↔мобильная, недоступность сервера — рано или поздно сеть вернётся.
             fails++;
             long wait = Math.min(30000L, 2000L * fails);
-            LogStore.add("SSH", "Повтор через " + (wait / 1000) + "с (попытка " + fails + ")");
+            LogStore.add("SSH", L10n.s(R.string.log_ssh_04) + (wait / 1000) + L10n.s(R.string.log_ssh_05) + fails + ")");
             try {
                 Thread.sleep(wait);
             } catch (InterruptedException ie) {
@@ -201,10 +201,10 @@ public class SshTunnel {
             try {
                 jsch.addIdentity("grizzly_ssh_key", keyPem.getBytes("UTF-8"), null, pass);
             } catch (JSchException e) {
-                throw new PermanentException("Не удалось прочитать приватный ключ SSH "
-                        + "(проверьте ключ и пароль ключа в настройках): " + e.getMessage());
+                throw new PermanentException(L10n.s(R.string.log_ssh_06)
+                        + L10n.s(R.string.log_ssh_07) + e.getMessage());
             }
-            LogStore.add("SSH", "Аутентификация: приватный ключ");
+            LogStore.add("SSH", L10n.s(R.string.log_ssh_08));
         }
         Session s = jsch.getSession(user, host, port);
         s.setSocketFactory(new ProtectedSocketFactory());
@@ -217,14 +217,14 @@ public class SshTunnel {
         } else {
             s.setConfig("PreferredAuthentications", "publickey,password");
         }
-        LogStore.add("SSH", "Подключение к " + user + "@" + host + ":" + port + " ...");
+        LogStore.add("SSH", L10n.s(R.string.log_ssh_09) + user + "@" + host + ":" + port + " ...");
         try {
             s.connect(CONNECT_TIMEOUT_MS);
         } catch (JSchException e) {
             String m = e.getMessage() == null ? "" : e.getMessage();
             if (m.contains("Auth fail") || m.contains("Auth cancel") || m.contains("AUTH fail")) {
-                throw new PermanentException("Аутентификация SSH не удалась (" + user + "@"
-                        + host + ":" + port + "). Проверьте логин/пароль/ключ в настройках SSH.");
+                throw new PermanentException(L10n.s(R.string.log_ssh_10) + user + "@"
+                        + host + ":" + port + L10n.s(R.string.log_ssh_11));
             }
             throw e; // сетевые/протокольные — ретраятся супервизором
         }
@@ -235,12 +235,12 @@ public class SshTunnel {
         String stored = config.getSshHostKeyFp();
         if (stored == null || stored.trim().isEmpty()) {
             config.setSshHostKeyFp(fp);
-            LogStore.add("SSH", "Отпечаток хост-ключа сохранён (TOFU): " + fp);
+            LogStore.add("SSH", L10n.s(R.string.log_ssh_12) + fp);
         } else if (!stored.equals(fp)) {
             s.disconnect();
-            throw new PermanentException("Отпечаток SSH-хоста ИЗМЕНИЛСЯ (было: " + stored
-                    + ", стало: " + fp + "). Возможен MITM или переустановка сервера. "
-                    + "Если сервер менялся намеренно — сбросьте отпечаток в настройках SSH.");
+            throw new PermanentException(L10n.s(R.string.log_ssh_13) + stored
+                    + L10n.s(R.string.log_ssh_14) + fp + L10n.s(R.string.log_ssh_15)
+                    + L10n.s(R.string.log_ssh_16));
         }
 
         // Локальный форвард; если порт занят — пробуем несколько следующих.
@@ -255,11 +255,11 @@ public class SshTunnel {
         }
         if (bound < 0) {
             s.disconnect();
-            throw new IOException("Не удалось занять локальный порт "
+            throw new IOException(L10n.s(R.string.log_ssh_17)
                     + wantLocalPort + "-" + (wantLocalPort + 5) + ": " + last);
         }
         session = s;
-        LogStore.add("SSH", "SSH-сессия установлена; форвард 127.0.0.1:" + bound
+        LogStore.add("SSH", L10n.s(R.string.log_ssh_18) + bound
                 + " → " + targetHost + ":" + targetPort);
         return bound;
     }
@@ -292,7 +292,7 @@ public class SshTunnel {
                         protectFd.accept(fd);
                     }
                 } catch (Throwable t) {
-                    LogStore.add("SSH", "protect(fd) не удался: " + t);
+                    LogStore.add("SSH", L10n.s(R.string.log_ssh_19) + t);
                 }
                 return s;
             } catch (IOException e) {
