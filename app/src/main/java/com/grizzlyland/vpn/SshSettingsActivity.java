@@ -43,57 +43,55 @@ public class SshSettingsActivity extends Activity {
         root.setPadding(32, 32, 32, 32);
 
         TextView title = new TextView(this);
-        title.setText("Настройки SSH");
+        title.setText(getString(R.string.ssh_settings));
         title.setTextSize(24);
         title.setGravity(Gravity.CENTER);
         root.addView(title);
 
         TextView hint = new TextView(this);
-        hint.setText("Режим «OpenVPN через SSH»: телефон подключается к SSH-серверу и получает "
-                + "порт его OpenVPN через локальный форвард (аналог ssh -L). ВНИМАНИЕ: "
-                + "OpenVPN-сервер должен слушать proto tcp — SSH форвардит только TCP.");
+        hint.setText(getString(R.string.hint_ssh));
         hint.setTextSize(12);
         hint.setPadding(0, 8, 0, 16);
         root.addView(hint);
 
-        host = addField(root, "SSH-сервер (хост или IP)", config.getSshHost());
-        port = addField(root, "Порт SSH (обычно 22)", String.valueOf(config.getSshPort()));
-        user = addField(root, "Пользователь", config.getSshUser());
-        auth = addSpinner(root, "Аутентификация",
-                new String[]{"Пароль", "Ключ (PEM/OpenSSH)"},
+        host = addField(root, getString(R.string.label_ssh_host), config.getSshHost());
+        port = addField(root, getString(R.string.label_ssh_port), String.valueOf(config.getSshPort()));
+        user = addField(root, getString(R.string.label_ssh_user), config.getSshUser());
+        auth = addSpinner(root, getString(R.string.label_auth),
+                new String[]{getString(R.string.auth_password), getString(R.string.auth_key)},
                 ConfigManager.SSH_AUTH_KEY.equals(config.getSshAuth()) ? 1 : 0);
-        password = addField(root, "Пароль (для аутентификации паролем)", config.getSshPassword());
-        key = addMultiline(root, "Приватный ключ (для аутентификации по ключу)", config.getSshKey());
-        keyPass = addField(root, "Пароль ключа (если есть)", config.getSshKeyPass());
-        target = addField(root, "Цель форварда host:port (OpenVPN на стороне сервера)",
+        password = addField(root, getString(R.string.label_ssh_password), config.getSshPassword());
+        key = addMultiline(root, getString(R.string.label_ssh_key), config.getSshKey());
+        keyPass = addField(root, getString(R.string.label_ssh_key_pass), config.getSshKeyPass());
+        target = addField(root, getString(R.string.label_ssh_target),
                 config.getSshTarget());
-        localPort = addField(root, "Локальный порт форварда (по умолчанию 11940)",
+        localPort = addField(root, getString(R.string.label_ssh_local_port),
                 String.valueOf(config.getSshLocalPort()));
 
         fingerprint = new TextView(this);
         fingerprint.setTextSize(12);
         String fp = config.getSshHostKeyFp();
-        fingerprint.setText("Отпечаток хост-ключа: "
-                + (fp == null || fp.isEmpty() ? "(не зафиксирован)" : fp));
+        fingerprint.setText(getString(R.string.label_hostkey_fp,
+                fp == null || fp.isEmpty() ? getString(R.string.fp_not_recorded) : fp));
         fingerprint.setPadding(0, 16, 0, 0);
         root.addView(fingerprint);
 
         Button forget = new Button(this);
-        forget.setText("Забыть отпечаток хост-ключа");
+        forget.setText(getString(R.string.btn_forget_fp));
         forget.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 config.setSshHostKeyFp("");
-                fingerprint.setText("Отпечаток хост-ключа: (не зафиксирован)");
+                fingerprint.setText(getString(R.string.label_hostkey_fp, getString(R.string.fp_not_recorded)));
                 Toast.makeText(SshSettingsActivity.this,
-                        "Отпечаток сброшен — зафиксируется при следующем подключении",
+                        getString(R.string.toast_fp_reset),
                         Toast.LENGTH_SHORT).show();
             }
         });
         root.addView(forget, lp());
 
         Button save = new Button(this);
-        save.setText("Сохранить");
+        save.setText(getString(R.string.btn_save));
         save.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -119,11 +117,11 @@ public class SshSettingsActivity extends Activity {
             config.setSshKeyPass(keyPass.getText().toString());
             config.setSshTarget(target.getText().toString());
             config.setSshLocalPort(Integer.parseInt(localPort.getText().toString().trim()));
-            Toast.makeText(this, "Настройки SSH сохранены", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_ssh_saved), Toast.LENGTH_SHORT).show();
             GrizzlyLandVpnService.requestApply(this);
             finish();
         } catch (NumberFormatException e) {
-            Toast.makeText(this, "Порты должны быть числами", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, getString(R.string.toast_ports_nan), Toast.LENGTH_LONG).show();
         }
     }
 

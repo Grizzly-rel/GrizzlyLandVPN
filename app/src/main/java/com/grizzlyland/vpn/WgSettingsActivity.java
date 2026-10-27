@@ -46,16 +46,13 @@ public class WgSettingsActivity extends Activity {
         root.setPadding(32, 32, 32, 32);
 
         TextView title = new TextView(this);
-        title.setText("Настройки WireGuard");
+        title.setText(getString(R.string.wg_settings));
         title.setTextSize(24);
         title.setGravity(Gravity.CENTER);
         root.addView(title);
 
         TextView hint = new TextView(this);
-        hint.setText("Вставьте конфиг в формате wg-quick (как в стандартном .conf): "
-                + "[Interface] с PrivateKey/Address/DNS и [Peer] с PublicKey/Endpoint/"
-                + "AllowedIPs. Можно сгенерировать ключи кнопкой ниже — публичный ключ "
-                + "тогда нужно вписать на сервере как Peer.");
+        hint.setText(getString(R.string.hint_wg));
         hint.setTextSize(12);
         hint.setPadding(0, 8, 0, 16);
         root.addView(hint);
@@ -65,7 +62,7 @@ public class WgSettingsActivity extends Activity {
         io.setOrientation(LinearLayout.HORIZONTAL);
 
         Button importBtn = new Button(this);
-        importBtn.setText("Импорт .conf");
+        importBtn.setText(getString(R.string.btn_import_conf));
         importBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -76,7 +73,7 @@ public class WgSettingsActivity extends Activity {
                 LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
         Button exportBtn = new Button(this);
-        exportBtn.setText("Экспорт .conf");
+        exportBtn.setText(getString(R.string.btn_export_conf));
         exportBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -95,14 +92,14 @@ public class WgSettingsActivity extends Activity {
         ioQr.setOrientation(LinearLayout.HORIZONTAL);
 
         Button qrScanBtn = new Button(this);
-        qrScanBtn.setText("Сканировать QR");
+        qrScanBtn.setText(getString(R.string.btn_scan_qr));
         qrScanBtn.setOnClickListener(v -> startActivityForResult(
                 new Intent(this, QrScanActivity.class), REQ_QR_SCAN));
         ioQr.addView(qrScanBtn, new LinearLayout.LayoutParams(0,
                 LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
         Button qrShowBtn = new Button(this);
-        qrShowBtn.setText("Показать QR");
+        qrShowBtn.setText(getString(R.string.btn_show_qr));
         qrShowBtn.setOnClickListener(v -> showQr());
         ioQr.addView(qrShowBtn, new LinearLayout.LayoutParams(0,
                 LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
@@ -110,7 +107,7 @@ public class WgSettingsActivity extends Activity {
         root.addView(ioQr, lp());
 
         TextView rawLabel = new TextView(this);
-        rawLabel.setText("Конфиг wg-quick");
+        rawLabel.setText(getString(R.string.label_wg_raw));
         root.addView(rawLabel);
 
         raw = new EditText(this);
@@ -122,7 +119,7 @@ public class WgSettingsActivity extends Activity {
         root.addView(raw, lp());
 
         Button gen = new Button(this);
-        gen.setText("Сгенерировать ключи");
+        gen.setText(getString(R.string.btn_generate_keys));
         gen.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -137,7 +134,7 @@ public class WgSettingsActivity extends Activity {
         root.addView(pubkeyLabel, lp());
 
         Button save = new Button(this);
-        save.setText("Сохранить");
+        save.setText(getString(R.string.btn_save));
         save.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -181,10 +178,10 @@ public class WgSettingsActivity extends Activity {
         if (requestCode == REQ_QR_SCAN) {
             String text = data.getStringExtra("text");
             if (text == null || text.trim().isEmpty()) {
-                Toast.makeText(this, "QR отсканирован, но текст пуст", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, getString(R.string.toast_qr_empty), Toast.LENGTH_LONG).show();
                 return;
             }
-            applyImportedConfig(text, "Конфиг импортирован из QR");
+            applyImportedConfig(text, getString(R.string.toast_conf_from_qr));
             return;
         }
         Uri uri = data.getData();
@@ -197,9 +194,9 @@ public class WgSettingsActivity extends Activity {
                 String text = raw.getText().toString();
                 String out = (!text.trim().isEmpty() ? text : config.getWgRaw()).trim() + "\n";
                 os.write(out.getBytes("UTF-8"));
-                Toast.makeText(this, "Конфиг .conf экспортирован", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(R.string.toast_conf_exported), Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
-                Toast.makeText(this, "Ошибка экспорта: " + e.getMessage(),
+                Toast.makeText(this, getString(R.string.toast_export_error, e.getMessage()),
                         Toast.LENGTH_LONG).show();
             }
         } else if (requestCode == REQ_IMPORT) {
@@ -211,9 +208,9 @@ public class WgSettingsActivity extends Activity {
                     bos.write(buf, 0, n);
                 }
                 applyImportedConfig(new String(bos.toByteArray(), "UTF-8"),
-                        "Конфиг .conf импортирован");
+                        getString(R.string.toast_conf_imported));
             } catch (Exception e) {
-                Toast.makeText(this, "Ошибка импорта: " + e.getMessage(),
+                Toast.makeText(this, getString(R.string.toast_import_error, e.getMessage()),
                         Toast.LENGTH_LONG).show();
             }
         }
@@ -231,8 +228,7 @@ public class WgSettingsActivity extends Activity {
         if (cfg.valid) {
             Toast.makeText(this, okMessage, Toast.LENGTH_SHORT).show();
         } else {
-            Toast.makeText(this, okMessage + ", но конфиг неполный "
-                    + "(нужны [Interface] PrivateKey и [Peer] PublicKey)",
+            Toast.makeText(this, okMessage + getString(R.string.incomplete_with_details),
                     Toast.LENGTH_LONG).show();
         }
     }
@@ -247,7 +243,7 @@ public class WgSettingsActivity extends Activity {
             text = config.getWgRaw();
         }
         if (text.trim().isEmpty()) {
-            Toast.makeText(this, "Конфиг пуст — показать нечего", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_conf_empty), Toast.LENGTH_SHORT).show();
             return;
         }
         final String conf = text;
@@ -260,7 +256,7 @@ public class WgSettingsActivity extends Activity {
                 runOnUiThread(() -> showQrDialog(bmp));
             } catch (Exception e) {
                 runOnUiThread(() -> Toast.makeText(this,
-                        "Ошибка генерации QR: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                        getString(R.string.toast_qr_gen_error, e.getMessage()), Toast.LENGTH_LONG).show());
             }
         }, "wg-qr-gen").start();
     }
@@ -274,16 +270,15 @@ public class WgSettingsActivity extends Activity {
         box.setPadding(24, 24, 24, 24);
         box.setGravity(Gravity.CENTER_HORIZONTAL);
         TextView note = new TextView(this);
-        note.setText("Отсканируйте этот QR в WireGuard (или в этом приложении) "
-                + "на другом устройстве");
+        note.setText(getString(R.string.qr_dialog_note_wg));
         note.setTextSize(12);
         note.setPadding(0, 0, 0, 12);
         box.addView(note);
         box.addView(iv);
         new android.app.AlertDialog.Builder(this)
-                .setTitle("Конфиг WireGuard — QR")
+                .setTitle(getString(R.string.qr_dialog_title_wg))
                 .setView(box)
-                .setPositiveButton("Закрыть", null)
+                .setPositiveButton(getString(R.string.btn_close), null)
                 .show();
     }
 
@@ -324,11 +319,11 @@ public class WgSettingsActivity extends Activity {
             String priv = Libxray.wgGenPrivateKey();
             String pub = Libxray.wgPublicKeyOf(priv);
             raw.setText(withPrivateKey(raw.getText().toString(), priv));
-            pubkeyLabel.setText("PublicKey интерфейса (впишите на сервере):\n" + pub);
-            Toast.makeText(this, "Ключи сгенерированы — не забудьте сохранить",
+            pubkeyLabel.setText(getString(R.string.label_pubkey, pub));
+            Toast.makeText(this, getString(R.string.toast_keys_generated),
                     Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
-            Toast.makeText(this, "Ошибка генерации ключей: " + e.getMessage(),
+            Toast.makeText(this, getString(R.string.toast_keygen_error, e.getMessage()),
                     Toast.LENGTH_LONG).show();
         }
     }
@@ -383,10 +378,10 @@ public class WgSettingsActivity extends Activity {
         config.setWgRaw(text);
         WgConfigParser.WgConfig cfg = WgConfigParser.parse(text);
         if (cfg.valid) {
-            Toast.makeText(this, "Конфиг WireGuard сохранён", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_wg_saved), Toast.LENGTH_SHORT).show();
         } else {
-            Toast.makeText(this, "Сохранено, но конфиг неполный "
-                    + "(нужны [Interface] PrivateKey и [Peer] PublicKey)",
+            Toast.makeText(this, getString(R.string.saved_incomplete_prefix) + " "
+                            + getString(R.string.incomplete_details),
                     Toast.LENGTH_LONG).show();
         }
         GrizzlyLandVpnService.requestApply(this);

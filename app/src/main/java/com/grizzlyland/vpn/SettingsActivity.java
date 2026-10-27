@@ -39,13 +39,13 @@ public class SettingsActivity extends Activity {
         root.setPadding(32, 32, 32, 32);
 
         TextView title = new TextView(this);
-        title.setText("Настройки");
+        title.setText(getString(R.string.settings));
         title.setTextSize(24);
         title.setGravity(Gravity.CENTER);
         root.addView(title);
 
         TextView modeLabel = new TextView(this);
-        modeLabel.setText("Режим работы");
+        modeLabel.setText(getString(R.string.mode_heading));
         modeLabel.setTextSize(18);
         modeLabel.setPadding(0, 24, 0, 8);
         root.addView(modeLabel);
@@ -53,10 +53,10 @@ public class SettingsActivity extends Activity {
         modeGroup = new RadioGroup(this);
         addMode(modeGroup, "Xray", ConfigManager.MODE_XRAY);
         addMode(modeGroup, "OpenVPN", ConfigManager.MODE_OPENVPN);
-        addMode(modeGroup, "OpenVPN через Xray", ConfigManager.MODE_XRAY_OVPN);
-        addMode(modeGroup, "OpenVPN через SSH", ConfigManager.MODE_OVPN_SSH);
+        addMode(modeGroup, getString(R.string.mode_xray_ovpn), ConfigManager.MODE_XRAY_OVPN);
+        addMode(modeGroup, getString(R.string.mode_ovpn_ssh), ConfigManager.MODE_OVPN_SSH);
         addMode(modeGroup, "WireGuard", ConfigManager.MODE_WG);
-        addMode(modeGroup, "WireGuard через Xray", ConfigManager.MODE_WG_XRAY);
+        addMode(modeGroup, getString(R.string.mode_wg_xray), ConfigManager.MODE_WG_XRAY);
         addMode(modeGroup, "AmneziaWG", ConfigManager.MODE_AWG);
         selectMode(config.getMode());
         // Самосохранение: клик по радиокнопке сразу применяет режим (реконнект,
@@ -77,14 +77,14 @@ public class SettingsActivity extends Activity {
                     config.setMode(mode);
                     GrizzlyLandVpnService.requestApply(SettingsActivity.this);
                     Toast.makeText(SettingsActivity.this,
-                            "Режим сохранён: " + rb.getText(), Toast.LENGTH_SHORT).show();
+                            getString(R.string.toast_mode_saved, rb.getText()), Toast.LENGTH_SHORT).show();
                 }
             }
         });
         root.addView(modeGroup);
 
         Button xray = new Button(this);
-        xray.setText("Настройки Xray");
+        xray.setText(getString(R.string.xray_settings));
         xray.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -94,7 +94,7 @@ public class SettingsActivity extends Activity {
         root.addView(xray, lp());
 
         Button ovpn = new Button(this);
-        ovpn.setText("Настройки OpenVPN");
+        ovpn.setText(getString(R.string.openvpn_settings));
         ovpn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -104,7 +104,7 @@ public class SettingsActivity extends Activity {
         root.addView(ovpn, lp());
 
         Button ssh = new Button(this);
-        ssh.setText("Настройки SSH");
+        ssh.setText(getString(R.string.ssh_settings));
         ssh.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -114,7 +114,7 @@ public class SettingsActivity extends Activity {
         root.addView(ssh, lp());
 
         Button wg = new Button(this);
-        wg.setText("Настройки WireGuard");
+        wg.setText(getString(R.string.wg_settings));
         wg.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -124,7 +124,7 @@ public class SettingsActivity extends Activity {
         root.addView(wg, lp());
 
         Button awg = new Button(this);
-        awg.setText("Настройки AmneziaWG");
+        awg.setText(getString(R.string.awg_settings));
         awg.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -134,7 +134,7 @@ public class SettingsActivity extends Activity {
         root.addView(awg, lp());
 
         Button exportAll = new Button(this);
-        exportAll.setText("Экспорт всех настроек");
+        exportAll.setText(getString(R.string.export_all_btn));
         exportAll.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -144,7 +144,7 @@ public class SettingsActivity extends Activity {
         root.addView(exportAll, lp());
 
         Button importAll = new Button(this);
-        importAll.setText("Импорт всех настроек");
+        importAll.setText(getString(R.string.import_all_btn));
         importAll.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -184,7 +184,7 @@ public class SettingsActivity extends Activity {
         Uri uri = data.getData();
         switch (requestCode) {
             case REQ_EXPORT_ALL: {
-                writeExport(uri, config.exportJson(), "Все настройки экспортированы");
+                writeExport(uri, config.exportJson(), getString(R.string.toast_all_exported));
                 break;
             }
             case REQ_IMPORT_ALL: {
@@ -194,7 +194,7 @@ public class SettingsActivity extends Activity {
                         config.importJson(json);
                     }
                     @Override
-                    public String toast() { return "Все настройки импортированы"; }
+                    public String toast() { return getString(R.string.toast_all_imported); }
                 });
                 break;
             }
@@ -206,7 +206,7 @@ public class SettingsActivity extends Activity {
             os.write(json.getBytes("UTF-8"));
             Toast.makeText(this, okMsg, Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
-            Toast.makeText(this, "Ошибка экспорта: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, getString(R.string.toast_export_error, e.getMessage()), Toast.LENGTH_LONG).show();
         }
     }
 
@@ -227,7 +227,7 @@ public class SettingsActivity extends Activity {
             GrizzlyLandVpnService.requestApply(this);
             Toast.makeText(this, action.toast(), Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
-            Toast.makeText(this, "Ошибка импорта: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, getString(R.string.toast_import_error, e.getMessage()), Toast.LENGTH_LONG).show();
         }
     }
 

@@ -61,7 +61,7 @@ public class OpenVpnSettingsActivity extends Activity {
         root.setPadding(32, 32, 32, 32);
 
         TextView title = new TextView(this);
-        title.setText("Настройки OpenVPN");
+        title.setText(getString(R.string.openvpn_settings));
         title.setTextSize(24);
         title.setGravity(Gravity.CENTER);
         root.addView(title);
@@ -71,7 +71,7 @@ public class OpenVpnSettingsActivity extends Activity {
         io.setOrientation(LinearLayout.HORIZONTAL);
 
         Button importBtn = new Button(this);
-        importBtn.setText("Импорт .ovpn");
+        importBtn.setText(getString(R.string.btn_import_ovpn));
         importBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -81,7 +81,7 @@ public class OpenVpnSettingsActivity extends Activity {
         io.addView(importBtn, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
         Button exportBtn = new Button(this);
-        exportBtn.setText("Экспорт .ovpn");
+        exportBtn.setText(getString(R.string.btn_export_ovpn));
         exportBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -92,10 +92,10 @@ public class OpenVpnSettingsActivity extends Activity {
 
         root.addView(io, lp());
 
-        protocol = addSpinner(root, "Протокол",
+        protocol = addSpinner(root, getString(R.string.label_protocol),
                 new String[]{"udp", "tcp"}, config.getOvpnProtocol());
 
-        cipher = addSpinner(root, "Шифрование",
+        cipher = addSpinner(root, getString(R.string.label_cipher),
                 new String[]{
                         "none",                       // без шифрования (для режима Xray+OpenVPN)
                         "AES-256-GCM", "AES-128-GCM",
@@ -110,42 +110,42 @@ public class OpenVpnSettingsActivity extends Activity {
 
         remoteHost = addField(root, "Remote host", config.getOvpnRemoteHost());
         remotePort = addField(root, "Remote port", String.valueOf(config.getOvpnRemotePort()));
-        ca = addField(root, "CA сертификат (-----BEGIN CERTIFICATE-----)", config.getOvpnCa());
+        ca = addField(root, getString(R.string.label_ca), config.getOvpnCa());
         cert = addField(root, "Client cert", config.getOvpnCert());
         key = addField(root, "Client key", config.getOvpnKey());
-        staticKey = addField(root, "Статический ключ (--secret, если PKI не используется)",
+        staticKey = addField(root, getString(R.string.label_static_key),
                 config.getOvpnStaticKey());
-        mtu = addField(root, "MTU (tun-mtu, напр. 1400)", config.getOvpnMtu());
-        mssfix = addField(root, "MSS-fix (mssfix, напр. 1450)", config.getOvpnMssfix());
-        dns = addField(root, "DNS-серверы OpenVPN (через запятую)",
+        mtu = addField(root, getString(R.string.label_mtu), config.getOvpnMtu());
+        mssfix = addField(root, getString(R.string.label_mssfix), config.getOvpnMssfix());
+        dns = addField(root, getString(R.string.label_ovpn_dns),
                 config.getOvpnDns());
-        dev = addSpinner(root, "Устройство (dev): tun = L3, tap = L2-бридж (TapShim)",
+        dev = addSpinner(root, getString(R.string.label_dev),
                 new String[]{"tun", "tap"}, config.getOvpnDev());
-        remoteCertTls = addField(root, "remote-cert-tls (напр. server)",
+        remoteCertTls = addField(root, getString(R.string.label_remote_cert_tls),
                 config.getOvpnRemoteCertTls());
-        compress = addField(root, "Сжатие (compress/comp-lzo, напр. lzo)",
+        compress = addField(root, getString(R.string.label_compress),
                 config.getOvpnCompress());
-        routes = addField(root, "Маршруты (route, через запятую: 192.168.5.0 255.255.255.0)",
+        routes = addField(root, getString(R.string.label_routes),
                 config.getOvpnRoutes());
 
         TextView rdLabel = new TextView(this);
-        rdLabel.setText("redirect-gateway (весь трафик через туннель)");
+        rdLabel.setText(getString(R.string.label_redirect_gateway));
         root.addView(rdLabel);
         redirect = new android.widget.CheckBox(this);
         redirect.setChecked(config.getOvpnRedirectGateway());
         root.addView(redirect, lp());
 
-        keyPassword = addField(root, "Пароль приватного ключа (если зашифрован)",
+        keyPassword = addField(root, getString(R.string.label_key_password),
                 config.getOvpnKeyPassword());
-        username = addField(root, "Логин (auth-user-pass, если требуется)",
+        username = addField(root, getString(R.string.label_username),
                 config.getOvpnUsername());
-        password = addField(root, "Пароль (auth-user-pass)",
+        password = addField(root, getString(R.string.label_password),
                 config.getOvpnPassword());
-        verb = addField(root, "verb (детальность логов, напр. 3; для подробного журнала 5)",
+        verb = addField(root, getString(R.string.label_verb),
                 String.valueOf(config.getOvpnVerb()));
 
         Button save = new Button(this);
-        save.setText("Сохранить");
+        save.setText(getString(R.string.btn_save));
         save.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -219,9 +219,9 @@ public class OpenVpnSettingsActivity extends Activity {
                 String out = (raw != null && !raw.trim().isEmpty())
                         ? raw : OpenVpnConfigBuilder.exportOvpn(config);
                 os.write(out.getBytes("UTF-8"));
-                Toast.makeText(this, "Конфиг .ovpn экспортирован", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(R.string.toast_ovpn_exported), Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
-                Toast.makeText(this, "Ошибка экспорта: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                Toast.makeText(this, getString(R.string.toast_export_error, e.getMessage()), Toast.LENGTH_LONG).show();
             }
         } else if (requestCode == REQ_IMPORT) {
             try (InputStream is = getContentResolver().openInputStream(uri)) {
@@ -234,9 +234,9 @@ public class OpenVpnSettingsActivity extends Activity {
                 ConfigParser.applyOvpn(config, new String(bos.toByteArray(), "UTF-8"));
                 refreshFromConfig();
                 GrizzlyLandVpnService.requestApply(this);
-                Toast.makeText(this, "Конфиг .ovpn импортирован", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(R.string.toast_ovpn_imported), Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
-                Toast.makeText(this, "Ошибка импорта: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                Toast.makeText(this, getString(R.string.toast_import_error, e.getMessage()), Toast.LENGTH_LONG).show();
             }
         }
     }
@@ -379,10 +379,10 @@ public class OpenVpnSettingsActivity extends Activity {
             } catch (NumberFormatException ignored) {
             }
             GrizzlyLandVpnService.requestApply(this);
-            Toast.makeText(this, "Сохранено", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_saved), Toast.LENGTH_SHORT).show();
             finish();
         } catch (NumberFormatException e) {
-            Toast.makeText(this, "Неверный порт", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_bad_port), Toast.LENGTH_SHORT).show();
         }
     }
 

@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Имя приложения намеренно не локализуется. -->
+    <string name="app_name">GrizzlyLandVPN</string>
+
+    <!-- ==== Общие ==== -->
+    <string name="action_disconnect">Отключить</string>
+    <string name="settings">Настройки</string>
+    <string name="btn_save">Сохранить</string>
+    <string name="toast_saved">Сохранено</string>
+    <string name="toast_bad_port">Неверный порт</string>
+    <string name="btn_close">Закрыть</string>
+    <string name="toast_export_error">Ошибка экспорта: %1$s</string>
+    <string name="toast_import_error">Ошибка импорта: %1$s</string>
+
+    <!-- ==== MainActivity ==== -->
+    <string name="select_apps_btn">Выбрать приложения</string>
+    <string name="logs_btn">Логи</string>
+    <string name="toast_settings_imported">Настройки импортированы</string>
+    <string name="connect_fmt">Подключить (%1$s)</string>
+    <string name="connect_configure">Подключить (настройте параметры)</string>
+    <string name="status_mode">Режим: %1$s</string>
+    <string name="status_ssh">SSH: %1$s (%2$s)</string>
+    <string name="status_ovpn_via_ssh">OpenVPN (через SSH): %1$s</string>
+    <string name="status_wg">WireGuard: %1$s</string>
+    <string name="status_config_set">конфиг задан</string>
+    <string name="status_config_missing">конфиг не задан</string>
+    <string name="status_endpoint">Endpoint: %1$s</string>
+    <string name="status_peer">Peer: %1$d, адресов: %2$d</string>
+    <string name="status_not_set">(не задан)</string>
+    <string name="status_awg">AmneziaWG: %1$s</string>
+    <string name="status_obfuscation">Обфускация: %1$s</string>
+    <string name="status_wg_endpoint">WG Endpoint: %1$s</string>
+    <string name="status_xray_wrap">Xray (обёртка): %1$s</string>
+    <string name="status_xray">Xray: %1$s</string>
+    <string name="status_xray_socks">Xray SOCKS: 127.0.0.1:%1$s</string>
+    <string name="status_openvpn">OpenVPN: %1$s</string>
+    <string name="status_all_apps">Приложения: весь телефон</string>
+    <string name="status_apps_count">Выбрано приложений: %1$d</string>
+    <string name="status_waiting_network">Сети нет — жду появления интернета (подключусь автоматически)</string>
+    <string name="status_connecting">Подключение…</string>
+    <string name="status_error">Ошибка: %1$s</string>
+    <string name="mode_xray_ovpn">OpenVPN через Xray</string>
+    <string name="mode_ovpn_ssh">OpenVPN через SSH</string>
+    <string name="mode_wg_xray">WireGuard через Xray</string>
+
+    <!-- ==== SettingsActivity ==== -->
+    <string name="mode_heading">Режим работы</string>
+    <string name="toast_mode_saved">Режим сохранён: %1$s</string>
+    <string name="xray_settings">Настройки Xray</string>
+    <string name="openvpn_settings">Настройки OpenVPN</string>
+    <string name="ssh_settings">Настройки SSH</string>
+    <string name="wg_settings">Настройки WireGuard</string>
+    <string name="awg_settings">Настройки AmneziaWG</string>
+    <string name="export_all_btn">Экспорт всех настроек</string>
+    <string name="import_all_btn">Импорт всех настроек</string>
+    <string name="toast_all_exported">Все настройки экспортированы</string>
+    <string name="toast_all_imported">Все настройки импортированы</string>
+
+    <!-- ==== XraySettingsActivity ==== -->
+    <string name="btn_import_xray">Импорт Xray</string>
+    <string name="btn_export_xray">Экспорт Xray</string>
+    <string name="label_protocol">Протокол</string>
+    <string name="label_address">Адрес сервера</string>
+    <string name="label_port">Порт</string>
+    <string name="label_socks_port">Локальный SOCKS-порт (для приложений)</string>
+    <string name="label_id">UUID / пароль / id</string>
+    <string name="label_transport">Транспорт</string>
+    <string name="label_path">Path (для ws/http)</string>
+    <string name="label_host_sni">Host / SNI (для ws/tls)</string>
+    <string name="label_dns_servers">DNS-серверы (через запятую; можно tcp://, https:// DoH, ip:853 DoT)</string>
+    <string name="label_alpn">ALPN (через запятую, напр. h2,http/1.1)</string>
+    <string name="label_header_type">Header type (tcp/kcp, напр. http)</string>
+    <string name="label_domain_strategy">domainStrategy (напр. UseIP)</string>
+    <string name="label_allow_insecure">allowInsecure (разрешить недоверенный сертификат)</string>
+    <string name="label_custom_json">Custom JSON-конфиг Xray (необязательно).\nЕсли заполнен — режим «Xray» использует его как есть (inbounds подменяются на tun-вход). Нужен блок outbounds.\nМожно импортировать кнопкой «Импорт Xray» выше.</string>
+    <string name="toast_xray_exported">Настройки Xray экспортированы</string>
+    <string name="toast_xray_imported">Настройки Xray импортированы</string>
+
+    <!-- ==== OpenVpnSettingsActivity ==== -->
+    <string name="btn_import_ovpn">Импорт .ovpn</string>
+    <string name="btn_export_ovpn">Экспорт .ovpn</string>
+    <string name="label_cipher">Шифрование</string>
+    <string name="label_ca">CA сертификат (-----BEGIN CERTIFICATE-----)</string>
+    <string name="label_static_key">Статический ключ (--secret, если PKI не используется)</string>
+    <string name="label_mtu">MTU (tun-mtu, напр. 1400)</string>
+    <string name="label_mssfix">MSS-fix (mssfix, напр. 1450)</string>
+    <string name="label_ovpn_dns">DNS-серверы OpenVPN (через запятую)</string>
+    <string name="label_dev">Устройство (dev): tun = L3, tap = L2-бридж (TapShim)</string>
+    <string name="label_remote_cert_tls">remote-cert-tls (напр. server)</string>
+    <string name="label_compress">Сжатие (compress/comp-lzo, напр. lzo)</string>
+    <string name="label_routes">Маршруты (route, через запятую: 192.168.5.0 255.255.255.0)</string>
+    <string name="label_redirect_gateway">redirect-gateway (весь трафик через туннель)</string>
+    <string name="label_key_password">Пароль приватного ключа (если зашифрован)</string>
+    <string name="label_username">Логин (auth-user-pass, если требуется)</string>
+    <string name="label_password">Пароль (auth-user-pass)</string>
+    <string name="label_verb">verb (детальность логов, напр. 3; для подробного журнала 5)</string>
+    <string name="toast_ovpn_exported">Конфиг .ovpn экспортирован</string>
+    <string name="toast_ovpn_imported">Конфиг .ovpn импортирован</string>
+
+    <!-- ==== SshSettingsActivity ==== -->
+    <string name="hint_ssh">Режим «OpenVPN через SSH»: телефон подключается к SSH-серверу и получает порт его OpenVPN через локальный форвард (аналог ssh -L). ВНИМАНИЕ: OpenVPN-сервер должен слушать proto tcp — SSH форвардит только TCP.</string>
+    <string name="label_ssh_host">SSH-сервер (хост или IP)</string>
+    <string name="label_ssh_port">Порт SSH (обычно 22)</string>
+    <string name="label_ssh_user">Пользователь</string>
+    <string name="label_auth">Аутентификация</string>
+    <string name="auth_password">Пароль</string>
+    <string name="auth_key">Ключ (PEM/OpenSSH)</string>
+    <string name="label_ssh_password">Пароль (для аутентификации паролем)</string>
+    <string name="label_ssh_key">Приватный ключ (для аутентификации по ключу)</string>
+    <string name="label_ssh_key_pass">Пароль ключа (если есть)</string>
+    <string name="label_ssh_target">Цель форварда host:port (OpenVPN на стороне сервера)</string>
+    <string name="label_ssh_local_port">Локальный порт форварда (по умолчанию 11940)</string>
+    <string name="label_hostkey_fp">Отпечаток хост-ключа: %1$s</string>
+    <string name="fp_not_recorded">(не зафиксирован)</string>
+    <string name="btn_forget_fp">Забыть отпечаток хост-ключа</string>
+    <string name="toast_fp_reset">Отпечаток сброшен — зафиксируется при следующем подключении</string>
+    <string name="toast_ssh_saved">Настройки SSH сохранены</string>
+    <string name="toast_ports_nan">Порты должны быть числами</string>
+
+    <!-- ==== WgSettingsActivity / AwgSettingsActivity (общие) ==== -->
+    <string name="btn_import_conf">Импорт .conf</string>
+    <string name="btn_export_conf">Экспорт .conf</string>
+    <string name="btn_scan_qr">Сканировать QR</string>
+    <string name="btn_show_qr">Показать QR</string>
+    <string name="btn_generate_keys">Сгенерировать ключи</string>
+    <string name="toast_qr_empty">QR отсканирован, но текст пуст</string>
+    <string name="toast_conf_from_qr">Конфиг импортирован из QR</string>
+    <string name="toast_conf_exported">Конфиг .conf экспортирован</string>
+    <string name="toast_conf_imported">Конфиг .conf импортирован</string>
+    <string name="toast_conf_empty">Конфиг пуст — показать нечего</string>
+    <string name="toast_qr_gen_error">Ошибка генерации QR: %1$s</string>
+    <string name="toast_keygen_error">Ошибка генерации ключей: %1$s</string>
+    <string name="toast_keys_generated">Ключи сгенерированы — не забудьте сохранить</string>
+    <string name="label_pubkey">PublicKey интерфейса (впишите на сервере):\n%1$s</string>
+    <string name="incomplete_with_details">, но конфиг неполный (нужны [Interface] PrivateKey и [Peer] PublicKey)</string>
+    <string name="incomplete_prefix">, но конфиг неполный</string>
+    <string name="incomplete_details">(нужны [Interface] PrivateKey и [Peer] PublicKey)</string>
+    <string name="saved_incomplete_prefix">Сохранено, но конфиг неполный</string>
+
+    <!-- ==== WgSettingsActivity ==== -->
+    <string name="hint_wg">Вставьте конфиг в формате wg-quick (как в стандартном .conf): [Interface] с PrivateKey/Address/DNS и [Peer] с PublicKey/Endpoint/AllowedIPs. Можно сгенерировать ключи кнопкой ниже — публичный ключ тогда нужно вписать на сервере как Peer.</string>
+    <string name="label_wg_raw">Конфиг wg-quick</string>
+    <string name="toast_wg_saved">Конфиг WireGuard сохранён</string>
+    <string name="qr_dialog_title_wg">Конфиг WireGuard — QR</string>
+    <string name="qr_dialog_note_wg">Отсканируйте этот QR в WireGuard (или в этом приложении) на другом устройстве</string>
+
+    <!-- ==== AwgSettingsActivity ==== -->
+    <string name="hint_awg">Вставьте конфиг в формате wg-quick (как в стандартном .conf): [Interface] с PrivateKey/Address/DNS и [Peer] с PublicKey/Endpoint/AllowedIPs. Конфиг AmneziaWG может содержать параметры обфускации в [Interface] (Jc, Jmin, Jmax, S1, S2, H1..H4) — если их нет, применяются дефолты. Можно сгенерировать ключи кнопкой ниже — публичный ключ тогда нужно вписать на сервере как Peer.</string>
+    <string name="label_awg_raw">Конфиг wg-quick (+ параметры обфускации)</string>
+    <string name="toast_awg_saved">Конфиг AmneziaWG сохранён</string>
+    <string name="qr_dialog_title_awg">Конфиг AmneziaWG — QR</string>
+    <string name="qr_dialog_note_awg">Отсканируйте этот QR в AmneziaWG/WireGuard-клиенте (или в этом приложении) на другом устройстве</string>
+
+    <!-- ==== AppSelectionActivity ==== -->
+    <string name="title_apps">Приложения для VPN</string>
+    <string name="switch_all_apps">VPN для всего телефона</string>
+    <string name="hint_all_on">Через VPN идут ВСЕ приложения, список ниже не действует.</string>
+    <string name="hint_all_off">Отметьте приложения, которые пойдут через VPN (пустой список = все приложения).</string>
+
+    <!-- ==== LogsActivity ==== -->
+    <string name="title_logs">Журнал подключения</string>
+    <string name="btn_copy">Копировать</string>
+    <string name="btn_clear">Очистить</string>
+    <string name="btn_debug_on">Подробный журнал: ВКЛ</string>
+    <string name="btn_debug_off">Подробный журнал: ВЫКЛ</string>
+    <string name="toast_logs_copied">Логи скопированы</string>
+
+    <!-- ==== QrScanActivity ==== -->
+    <string name="qr_hint">Наведите камеру на QR-код с конфигом WireGuard</string>
+    <string name="btn_torch">Фонарик</string>
+    <string name="toast_no_cam_permission">Без разрешения на камеру сканирование невозможно</string>
+    <string name="toast_camera_not_found">Камера не найдена</string>
+    <string name="toast_camera_error">Ошибка камеры: %1$d</string>
+    <string name="toast_camera_open_failed">Не удалось открыть камеру: %1$s</string>
+    <string name="toast_preview_error">Ошибка превью: %1$s</string>
+    <string name="toast_cam_session_failed">Камера не настроилась</string>
+    <string name="toast_cam_session_error">Ошибка сессии камеры: %1$s</string>
+    <string name="toast_torch_error">Фонарик недоступен: %1$s</string>
+
+    <!-- ==== GrizzlyLandVpnService (уведомления) ==== -->
+    <string name="notif_connecting">Подключение…</string>
+    <string name="notif_connected">VPN активен</string>
+    <string name="notif_waiting_internet">Жду появления интернета…</string>
+    <string name="notif_network_lost">Сеть пропала — жду…</string>
+</resources>

@@ -55,7 +55,7 @@ public class AppSelectionActivity extends Activity {
         root.setPadding(20, 20, 20, 20);
 
         TextView title = new TextView(this);
-        title.setText("Приложения для VPN");
+        title.setText(getString(R.string.title_apps));
         title.setTextSize(22);
         title.setGravity(Gravity.CENTER);
         root.addView(title);
@@ -63,7 +63,7 @@ public class AppSelectionActivity extends Activity {
         // Явный режим «VPN для всего телефона»: туннель без allowed-фильтра,
         // per-app список не действует (серый и некликабельный).
         Switch allAppsSwitch = new Switch(this);
-        allAppsSwitch.setText("VPN для всего телефона");
+        allAppsSwitch.setText(getString(R.string.switch_all_apps));
         allAppsSwitch.setTextSize(16);
         allAppsSwitch.setPadding(0, 20, 0, 4);
         allAppsSwitch.setChecked(config.getVpnAllApps());
@@ -98,8 +98,8 @@ public class AppSelectionActivity extends Activity {
     private void updateListEnabled() {
         boolean all = config.getVpnAllApps();
         hint.setText(all
-                ? "Через VPN идут ВСЕ приложения, список ниже не действует."
-                : "Отметьте приложения, которые пойдут через VPN (пустой список = все приложения).");
+                ? getString(R.string.hint_all_on)
+                : getString(R.string.hint_all_off));
         list.setAlpha(all ? 0.35f : 1f);
         adapter.notifyDataSetChanged();
     }

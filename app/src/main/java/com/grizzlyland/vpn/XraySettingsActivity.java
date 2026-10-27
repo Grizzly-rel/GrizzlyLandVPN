@@ -61,7 +61,7 @@ public class XraySettingsActivity extends Activity {
         root.setPadding(32, 32, 32, 32);
 
         TextView title = new TextView(this);
-        title.setText("Настройки Xray");
+        title.setText(getString(R.string.xray_settings));
         title.setTextSize(24);
         title.setGravity(Gravity.CENTER);
         root.addView(title);
@@ -71,7 +71,7 @@ public class XraySettingsActivity extends Activity {
         io.setOrientation(LinearLayout.HORIZONTAL);
 
         Button importBtn = new Button(this);
-        importBtn.setText("Импорт Xray");
+        importBtn.setText(getString(R.string.btn_import_xray));
         importBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -81,7 +81,7 @@ public class XraySettingsActivity extends Activity {
         io.addView(importBtn, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
         Button exportBtn = new Button(this);
-        exportBtn.setText("Экспорт Xray");
+        exportBtn.setText(getString(R.string.btn_export_xray));
         exportBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -92,26 +92,26 @@ public class XraySettingsActivity extends Activity {
 
         root.addView(io, lp());
 
-        protocol = addSpinner(root, "Протокол",
+        protocol = addSpinner(root, getString(R.string.label_protocol),
                 new String[]{"vless", "vmess", "trojan", "shadowsocks", "socks", "http"},
                 config.getXrayProtocol());
 
-        address = addField(root, "Адрес сервера", config.getXrayAddress());
-        port = addField(root, "Порт", String.valueOf(config.getXrayPort()));
-        socksPort = addField(root, "Локальный SOCKS-порт (для приложений)",
+        address = addField(root, getString(R.string.label_address), config.getXrayAddress());
+        port = addField(root, getString(R.string.label_port), String.valueOf(config.getXrayPort()));
+        socksPort = addField(root, getString(R.string.label_socks_port),
                 String.valueOf(config.getXraySocksPort()));
-        id = addField(root, "UUID / пароль / id", config.getXrayId());
+        id = addField(root, getString(R.string.label_id), config.getXrayId());
 
         security = addSpinner(root, "Security",
                 new String[]{"none", "tls", "reality", "xtls"},
                 config.getXraySecurity());
 
-        transport = addSpinner(root, "Транспорт",
+        transport = addSpinner(root, getString(R.string.label_transport),
                 new String[]{"tcp", "ws", "grpc", "httpupgrade", "xhttp", "http", "h2", "kcp", "quic"},
                 config.getXrayTransport());
 
-        path = addField(root, "Path (для ws/http)", config.getXrayPath());
-        host = addField(root, "Host / SNI (для ws/tls)", config.getXrayHost());
+        path = addField(root, getString(R.string.label_path), config.getXrayPath());
+        host = addField(root, getString(R.string.label_host_sni), config.getXrayHost());
 
         flow = addSpinner(root, "Flow (VLESS)",
                 new String[]{"none", "xtls-rprx-vision"},
@@ -127,18 +127,18 @@ public class XraySettingsActivity extends Activity {
                 new String[]{"chrome", "firefox", "safari", "random"},
                 config.getXrayFingerprint());
 
-        dns = addField(root, "DNS-серверы (через запятую; можно tcp://, https:// DoH, ip:853 DoT)",
+        dns = addField(root, getString(R.string.label_dns_servers),
                 config.getXrayDns());
         queryStrategy = addSpinner(root, "DNS queryStrategy",
                 new String[]{"UseIPv4", "UseIP", "UseIPv6", "UseSys"},
                 config.getXrayQueryStrategy());
-        alpn = addField(root, "ALPN (через запятую, напр. h2,http/1.1)", config.getXrayAlpn());
+        alpn = addField(root, getString(R.string.label_alpn), config.getXrayAlpn());
         spiderX = addField(root, "Reality spiderX", config.getXraySpiderX());
-        headerType = addField(root, "Header type (tcp/kcp, напр. http)", config.getXrayHeaderType());
-        domainStrategy = addField(root, "domainStrategy (напр. UseIP)", config.getXrayDomainStrategy());
+        headerType = addField(root, getString(R.string.label_header_type), config.getXrayHeaderType());
+        domainStrategy = addField(root, getString(R.string.label_domain_strategy), config.getXrayDomainStrategy());
 
         TextView aiLabel = new TextView(this);
-        aiLabel.setText("allowInsecure (разрешить недоверенный сертификат)");
+        aiLabel.setText(getString(R.string.label_allow_insecure));
         root.addView(aiLabel);
         allowInsecure = new android.widget.CheckBox(this);
         allowInsecure.setChecked(config.getXrayAllowInsecure());
@@ -149,10 +149,7 @@ public class XraySettingsActivity extends Activity {
 
         // --- Custom JSON (необязательно; используется в режиме "Xray") ---
         TextView customLabel = new TextView(this);
-        customLabel.setText("Custom JSON-конфиг Xray (необязательно).\n"
-                + "Если заполнен — режим «Xray» использует его как есть "
-                + "(inbounds подменяются на tun-вход). Нужен блок outbounds.\n"
-                + "Можно импортировать кнопкой «Импорт Xray» выше.");
+        customLabel.setText(getString(R.string.label_custom_json));
         customLabel.setTextSize(14);
         root.addView(customLabel);
         customJson = new android.widget.EditText(this);
@@ -162,7 +159,7 @@ public class XraySettingsActivity extends Activity {
         root.addView(customJson, lp());
 
         Button save = new Button(this);
-        save.setText("Сохранить");
+        save.setText(getString(R.string.btn_save));
         save.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -231,9 +228,9 @@ public class XraySettingsActivity extends Activity {
         if (requestCode == REQ_EXPORT) {
             try (OutputStream os = getContentResolver().openOutputStream(uri)) {
                 os.write(config.exportXrayJson().getBytes("UTF-8"));
-                Toast.makeText(this, "Настройки Xray экспортированы", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(R.string.toast_xray_exported), Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
-                Toast.makeText(this, "Ошибка экспорта: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                Toast.makeText(this, getString(R.string.toast_export_error, e.getMessage()), Toast.LENGTH_LONG).show();
             }
         } else if (requestCode == REQ_IMPORT) {
             try (InputStream is = getContentResolver().openInputStream(uri)) {
@@ -246,9 +243,9 @@ public class XraySettingsActivity extends Activity {
                 ConfigParser.applyXray(config, new String(bos.toByteArray(), "UTF-8"));
                 refreshFromConfig();
                 GrizzlyLandVpnService.requestApply(this);
-                Toast.makeText(this, "Настройки Xray импортированы", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(R.string.toast_xray_imported), Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
-                Toast.makeText(this, "Ошибка импорта: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                Toast.makeText(this, getString(R.string.toast_import_error, e.getMessage()), Toast.LENGTH_LONG).show();
             }
         }
     }
@@ -314,10 +311,10 @@ public class XraySettingsActivity extends Activity {
             config.setXrayDomainStrategy(domainStrategy.getText().toString().trim());
             config.setXrayCustomJson(customJson.getText().toString());
             GrizzlyLandVpnService.requestApply(this);
-            Toast.makeText(this, "Сохранено", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_saved), Toast.LENGTH_SHORT).show();
             finish();
         } catch (NumberFormatException e) {
-            Toast.makeText(this, "Неверный порт", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_bad_port), Toast.LENGTH_SHORT).show();
         }
     }
 

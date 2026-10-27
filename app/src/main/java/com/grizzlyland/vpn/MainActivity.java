@@ -36,7 +36,7 @@ public class MainActivity extends Activity {
             try {
                 new ConfigManager(this).importJson(importJson);
                 LogStore.add("Settings", "Импорт настроек через intent (" + importJson.length() + " байт)");
-                android.widget.Toast.makeText(this, "Настройки импортированы", android.widget.Toast.LENGTH_SHORT).show();
+                android.widget.Toast.makeText(this, getString(R.string.toast_settings_imported), android.widget.Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
                 LogStore.add("Settings", "ОШИБКА intent-импорта: " + e);
             }
@@ -95,7 +95,7 @@ public class MainActivity extends Activity {
         root.addView(connectButton, lp());
 
         Button selectApps = new Button(this);
-        selectApps.setText("Выбрать приложения");
+        selectApps.setText(getString(R.string.select_apps_btn));
         selectApps.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -105,7 +105,7 @@ public class MainActivity extends Activity {
         root.addView(selectApps, lp());
 
         Button settings = new Button(this);
-        settings.setText("Настройки");
+        settings.setText(getString(R.string.settings));
         settings.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -115,7 +115,7 @@ public class MainActivity extends Activity {
         root.addView(settings, lp());
 
         disconnectButton = new Button(this);
-        disconnectButton.setText("Отключить");
+        disconnectButton.setText(getString(R.string.action_disconnect));
         disconnectButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -125,7 +125,7 @@ public class MainActivity extends Activity {
         root.addView(disconnectButton, lp());
 
         Button logs = new Button(this);
-        logs.setText("Логи");
+        logs.setText(getString(R.string.logs_btn));
         logs.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -286,62 +286,68 @@ public class MainActivity extends Activity {
         String modeLabel = modeLabel(mode);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("Режим: ").append(modeLabel);
+        sb.append(getString(R.string.status_mode, modeLabel));
         if (ConfigManager.MODE_OVPN_SSH.equals(mode)) {
             // В режиме OpenVPN-через-SSH настройки Xray не участвуют — показываем SSH.
-            sb.append("\nSSH: ").append(config.getSshHost()).append(":")
-                    .append(config.getSshPort()).append(" (").append(config.getSshUser()).append(")");
-            sb.append("\nOpenVPN (через SSH): ").append(config.getSshTarget());
+            sb.append("\n").append(getString(R.string.status_ssh,
+                    config.getSshHost() + ":" + config.getSshPort(), config.getSshUser()));
+            sb.append("\n").append(getString(R.string.status_ovpn_via_ssh, config.getSshTarget()));
         } else if (ConfigManager.MODE_WG.equals(mode)) {
             // В режиме WireGuard показываем сводку по wg-конфигу.
             WgConfigParser.WgConfig c = WgConfigParser.parse(config.getWgRaw());
-            sb.append("\nWireGuard: ").append(c.valid ? "конфиг задан" : "конфиг не задан");
+            sb.append("\n").append(getString(R.string.status_wg, getString(c.valid
+                    ? R.string.status_config_set : R.string.status_config_missing)));
             if (c.valid) {
-                sb.append("\nEndpoint: ").append(c.endpointForLog.isEmpty() ? "(не задан)" : c.endpointForLog);
-                sb.append("\nPeer: ").append(c.peers)
-                        .append(", адресов: ").append(c.addresses.size());
+                sb.append("\n").append(getString(R.string.status_endpoint, c.endpointForLog.isEmpty()
+                        ? getString(R.string.status_not_set) : c.endpointForLog));
+                sb.append("\n").append(getString(R.string.status_peer, c.peers, c.addresses.size()));
             }
         } else if (ConfigManager.MODE_AWG.equals(mode)) {
             // В режиме AmneziaWG показываем сводку по awg-конфигу.
             AwgConfigParser.AwgConfig c = AwgConfigParser.parse(config.getAwgRaw());
-            sb.append("\nAmneziaWG: ").append(c.valid ? "конфиг задан" : "конфиг не задан");
+            sb.append("\n").append(getString(R.string.status_awg, getString(c.valid
+                    ? R.string.status_config_set : R.string.status_config_missing)));
             if (c.valid) {
-                sb.append("\nEndpoint: ").append(c.endpointForLog.isEmpty() ? "(не задан)" : c.endpointForLog);
-                sb.append("\nPeer: ").append(c.peers)
-                        .append(", адресов: ").append(c.addresses.size());
-                sb.append("\nОбфускация: ").append(AwgConfigParser.obfuscationSummary(c));
+                sb.append("\n").append(getString(R.string.status_endpoint, c.endpointForLog.isEmpty()
+                        ? getString(R.string.status_not_set) : c.endpointForLog));
+                sb.append("\n").append(getString(R.string.status_peer, c.peers, c.addresses.size()));
+                sb.append("\n").append(getString(R.string.status_obfuscation,
+                        AwgConfigParser.obfuscationSummary(c)));
             }
         } else if (ConfigManager.MODE_WG_XRAY.equals(mode)) {
             // WireGuard через Xray: WG-конфиг + Xray-обёртка.
             WgConfigParser.WgConfig c = WgConfigParser.parse(config.getWgRaw());
-            sb.append("\nWireGuard: ").append(c.valid ? "конфиг задан" : "конфиг не задан");
+            sb.append("\n").append(getString(R.string.status_wg, getString(c.valid
+                    ? R.string.status_config_set : R.string.status_config_missing)));
             if (c.valid) {
-                sb.append("\nWG Endpoint: ").append(c.endpointForLog.isEmpty() ? "(не задан)" : c.endpointForLog);
+                sb.append("\n").append(getString(R.string.status_wg_endpoint, c.endpointForLog.isEmpty()
+                        ? getString(R.string.status_not_set) : c.endpointForLog));
             }
-            sb.append("\nXray (обёртка): ").append(config.getXrayAddress()).append(":")
-                    .append(config.getXrayPort());
+            sb.append("\n").append(getString(R.string.status_xray_wrap,
+                    config.getXrayAddress() + ":" + config.getXrayPort()));
         } else {
-            sb.append("\nXray: ").append(config.getXrayAddress()).append(":")
-                    .append(config.getXrayPort());
+            sb.append("\n").append(getString(R.string.status_xray,
+                    config.getXrayAddress() + ":" + config.getXrayPort()));
             if (ConfigManager.MODE_XRAY.equals(mode) || ConfigManager.MODE_XRAY_OVPN.equals(mode)) {
-                sb.append("\nXray SOCKS: 127.0.0.1:").append(config.getXraySocksPort());
+                sb.append("\n").append(getString(R.string.status_xray_socks,
+                        String.valueOf(config.getXraySocksPort())));
             }
-            sb.append("\nOpenVPN: ").append(config.getOvpnRemoteHost()).append(":")
-                    .append(config.getOvpnRemotePort());
+            sb.append("\n").append(getString(R.string.status_openvpn,
+                    config.getOvpnRemoteHost() + ":" + config.getOvpnRemotePort()));
         }
         if (config.getVpnAllApps()) {
-            sb.append("\nПриложения: весь телефон");
+            sb.append("\n").append(getString(R.string.status_all_apps));
         } else {
-            sb.append("\nВыбрано приложений: ").append(count);
+            sb.append("\n").append(getString(R.string.status_apps_count, count));
         }
         if (GrizzlyLandVpnService.waitingNetwork) {
-            sb.append("\nСети нет — жду появления интернета (подключусь автоматически)");
+            sb.append("\n").append(getString(R.string.status_waiting_network));
         } else if (GrizzlyLandVpnService.serviceActive && !GrizzlyLandVpnService.connected) {
-            sb.append("\nПодключение…");
+            sb.append("\n").append(getString(R.string.status_connecting));
         }
         String err = GrizzlyLandVpnService.lastError;
         if (err != null && !err.isEmpty()) {
-            sb.append("\n\nОшибка: ").append(err);
+            sb.append("\n\n").append(getString(R.string.status_error, err));
         }
         statusText.setText(sb.toString());
 
@@ -352,9 +358,9 @@ public class MainActivity extends Activity {
         // повторный тап в этот момент только мешает текущей попытке.
         connectButton.setEnabled(ready && !isConnected && !GrizzlyLandVpnService.serviceActive);
         if (ready) {
-            connectButton.setText("Подключить (" + modeLabel + ")");
+            connectButton.setText(getString(R.string.connect_fmt, modeLabel));
         } else {
-            connectButton.setText("Подключить (настройте параметры)");
+            connectButton.setText(getString(R.string.connect_configure));
         }
 
         // ОТКЛЮЧИТЬ активна всегда, когда жив процесс VPN (подключается, ждёт сети,
@@ -371,7 +377,7 @@ public class MainActivity extends Activity {
             return "OpenVPN";
         }
         if (ConfigManager.MODE_OVPN_SSH.equals(mode)) {
-            return "OpenVPN через SSH";
+            return getString(R.string.mode_ovpn_ssh);
         }
         if (ConfigManager.MODE_WG.equals(mode)) {
             return "WireGuard";
@@ -380,9 +386,9 @@ public class MainActivity extends Activity {
             return "AmneziaWG";
         }
         if (ConfigManager.MODE_WG_XRAY.equals(mode)) {
-            return "WireGuard через Xray";
+            return getString(R.string.mode_wg_xray);
         }
-        return "OpenVPN через Xray";
+        return getString(R.string.mode_xray_ovpn);
     }
 
     private LinearLayout.LayoutParams lp() {

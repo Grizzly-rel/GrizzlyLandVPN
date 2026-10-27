@@ -35,7 +35,7 @@ public class LogsActivity extends Activity implements LogStore.Listener {
         root.setPadding(16, 16, 16, 16);
 
         TextView title = new TextView(this);
-        title.setText("Журнал подключения");
+        title.setText(getString(R.string.title_logs));
         title.setTextSize(22);
         title.setGravity(Gravity.CENTER);
         root.addView(title);
@@ -44,7 +44,7 @@ public class LogsActivity extends Activity implements LogStore.Listener {
         btnRow.setOrientation(LinearLayout.HORIZONTAL);
 
         Button copy = new Button(this);
-        copy.setText("Копировать");
+        copy.setText(getString(R.string.btn_copy));
         copy.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -54,7 +54,7 @@ public class LogsActivity extends Activity implements LogStore.Listener {
         btnRow.addView(copy, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
         Button clear = new Button(this);
-        clear.setText("Очистить");
+        clear.setText(getString(R.string.btn_clear));
         clear.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -140,7 +140,8 @@ public class LogsActivity extends Activity implements LogStore.Listener {
         if (config == null) {
             return;
         }
-        debugBtn.setText(config.getLogDebug() ? "Подробный журнал: ВКЛ" : "Подробный журнал: ВЫКЛ");
+        debugBtn.setText(config.getLogDebug()
+                ? getString(R.string.btn_debug_on) : getString(R.string.btn_debug_off));
     }
 
     private void copyLogs() {
@@ -148,7 +149,7 @@ public class LogsActivity extends Activity implements LogStore.Listener {
         ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
         if (cm != null) {
             cm.setPrimaryClip(ClipData.newPlainText("GrizzlyLandVPN logs", text));
-            Toast.makeText(this, "Логи скопированы", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_logs_copied), Toast.LENGTH_SHORT).show();
         }
     }
 

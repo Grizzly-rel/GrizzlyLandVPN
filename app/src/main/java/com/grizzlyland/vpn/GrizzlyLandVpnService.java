@@ -138,7 +138,7 @@ public class GrizzlyLandVpnService extends VpnService {
         long delay = Math.min(5000L * tunRetryAttempts, 60000L);
         LogStore.add("Service", "VpnService не дал TUN (" + modeTag + ") — повтор через "
                 + (delay / 1000) + " с (при загрузке телефона: ждём разблокировки экрана)");
-        updateNotification("Подключение…");
+        updateNotification(getString(R.string.notif_connecting));
         mainHandler.removeCallbacks(tunRetryRunnable);
         mainHandler.postDelayed(tunRetryRunnable, delay);
     }
@@ -184,7 +184,7 @@ public class GrizzlyLandVpnService extends VpnService {
         ovpnRetryAttempts++;
         LogStore.add("Service", "OpenVPN: " + reason
                 + " — повторная попытка через " + (delay / 1000) + " с");
-        updateNotification("Подключение…");
+        updateNotification(getString(R.string.notif_connecting));
         mainHandler.removeCallbacks(ovpnRetryRunnable);
         mainHandler.postDelayed(ovpnRetryRunnable, delay);
     }
@@ -457,7 +457,7 @@ public class GrizzlyLandVpnService extends VpnService {
                         connected = true;
                         tunRetryAttempts = 0;
                         broadcastState();
-                        updateNotification("VPN активен");
+                        updateNotification(getString(R.string.notif_connected));
                     } catch (Exception e) {
                         Log.e(TAG, "Xray TUN start failed", e);
                         LogStore.add("Service", "ОШИБКА запуска Xray TUN: " + e);
@@ -550,7 +550,7 @@ public class GrizzlyLandVpnService extends VpnService {
         netLostNotified = false;
         mainHandler.removeCallbacks(netLostGraceRunnable);
         broadcastState();
-        updateNotification("Жду появления интернета…");
+        updateNotification(getString(R.string.notif_waiting_internet));
         LogStore.add("Service", "Сети с интернетом нет (" + reason + ") — TUN не поднимаю "
                 + "(значка ключа нет), движки выключены; подключусь сам при появлении интернета");
     }
@@ -569,7 +569,7 @@ public class GrizzlyLandVpnService extends VpnService {
             return; // грейс-таймер уже тикает
         }
         netLostNotified = true;
-        updateNotification("Сеть пропала — жду…");
+        updateNotification(getString(R.string.notif_network_lost));
         LogStore.add("Service", "Сети с интернетом нет — держу туннель ещё "
                 + (NET_LOST_GRACE_MS / 1000) + "с (короткий обрыв переживёт), "
                 + "потом глушу до появления сети");
@@ -600,7 +600,7 @@ public class GrizzlyLandVpnService extends VpnService {
                 && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
             netLostNotified = false;
             mainHandler.removeCallbacks(netLostGraceRunnable);
-            updateNotification("VPN активен");
+            updateNotification(getString(R.string.notif_connected));
             LogStore.add("Service", networkLabel(caps) + " вернулась — туннель работает");
         }
     }
@@ -613,7 +613,7 @@ public class GrizzlyLandVpnService extends VpnService {
                 return; // уже отключено/уже ждём
             }
             if (hasInternetCapableNetwork()) {
-                updateNotification("VPN активен"); // сеть вернулась, пока шла пауза
+                updateNotification(getString(R.string.notif_connected)); // сеть вернулась, пока шла пауза
                 return;
             }
             LogStore.add("Service", "Сети нет уже " + (NET_LOST_GRACE_MS / 1000)
@@ -826,7 +826,7 @@ public class GrizzlyLandVpnService extends VpnService {
                 tunRetryAttempts = 0;
                 connected = true;
                 broadcastState();
-                updateNotification("VPN активен");
+                updateNotification(getString(R.string.notif_connected));
                 LogStore.add("Service", "WireGuard: туннель поднят");
                 registerWgNetworkCallback();
             }
@@ -893,7 +893,7 @@ public class GrizzlyLandVpnService extends VpnService {
                 tunRetryAttempts = 0;
                 connected = true;
                 broadcastState();
-                updateNotification("VPN активен");
+                updateNotification(getString(R.string.notif_connected));
                 LogStore.add("Service", "AmneziaWG: туннель поднят");
                 registerWgNetworkCallback();
             }
@@ -1002,7 +1002,7 @@ public class GrizzlyLandVpnService extends VpnService {
                 connected = true;
                 tunRetryAttempts = 0;
                 broadcastState();
-                updateNotification("VPN активен");
+                updateNotification(getString(R.string.notif_connected));
                 // UDP-сокет WG живёт внутри Xray: при смене сети пересоздаём туннель
                 // целиком (тот же NetworkCallback, что у режима WireGuard).
                 registerWgNetworkCallback();
@@ -1276,7 +1276,7 @@ public class GrizzlyLandVpnService extends VpnService {
                 tunRetryAttempts = 0;
                 ovpnRetryAttempts = 0;
                 broadcastState();
-                updateNotification("VPN активен");
+                updateNotification(getString(R.string.notif_connected));
                 LogStore.add("Service", "TUN создан: ip=" + localIp + " mtu=" + mtu
                         + " (fd=" + tunFdNumber(vpnInterface) + ")"
                         + " pushedDNS=" + (pushedDns == null ? 0 : pushedDns.size())
@@ -1555,9 +1555,9 @@ public class GrizzlyLandVpnService extends VpnService {
      *  без сети) уведомление сразу врало «VPN активен». */
     private Notification buildNotification() {
         if (waitingNetwork) {
-            return buildNotification("Жду появления интернета…");
+            return buildNotification(getString(R.string.notif_waiting_internet));
         }
-        return buildNotification("Подключение…");
+        return buildNotification(getString(R.string.notif_connecting));
     }
 
     private Notification buildNotification(String contentText) {
@@ -1579,7 +1579,7 @@ public class GrizzlyLandVpnService extends VpnService {
                 .setContentText(contentText)
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setOngoing(true)
-                .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Отключить", pi)
+                .addAction(android.R.drawable.ic_menu_close_clear_cancel, getString(R.string.action_disconnect), pi)
                 .build();
     }
 }

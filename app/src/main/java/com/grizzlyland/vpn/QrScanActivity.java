@@ -108,7 +108,7 @@ public class QrScanActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         TextView hint = new TextView(this);
-        hint.setText("Наведите камеру на QR-код с конфигом WireGuard");
+        hint.setText(getString(R.string.qr_hint));
         hint.setTextSize(14);
         hint.setPadding(24, 32, 24, 0);
         hint.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -117,7 +117,7 @@ public class QrScanActivity extends Activity {
                 Gravity.TOP));
 
         Button torch = new Button(this);
-        torch.setText("Фонарик");
+        torch.setText(getString(R.string.btn_torch));
         torch.setOnClickListener(v -> toggleTorch());
         FrameLayout.LayoutParams tlp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -185,7 +185,7 @@ public class QrScanActivity extends Activity {
         if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             openCameraIfPermitted();
         } else {
-            Toast.makeText(this, "Без разрешения на камеру сканирование невозможно",
+            Toast.makeText(this, getString(R.string.toast_no_cam_permission),
                     Toast.LENGTH_LONG).show();
             finish();
         }
@@ -217,7 +217,7 @@ public class QrScanActivity extends Activity {
                 cameraId = pickBackCamera();
             }
             if (cameraId == null) {
-                Toast.makeText(this, "Камера не найдена", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, getString(R.string.toast_camera_not_found), Toast.LENGTH_LONG).show();
                 finish();
                 return;
             }
@@ -271,13 +271,13 @@ public class QrScanActivity extends Activity {
                     }
                     if (!finished) {
                         Toast.makeText(QrScanActivity.this,
-                                "Ошибка камеры: " + error, Toast.LENGTH_LONG).show();
+                                getString(R.string.toast_camera_error, error), Toast.LENGTH_LONG).show();
                         finish();
                     }
                 }
             }, cameraHandler);
         } catch (Exception e) {
-            Toast.makeText(this, "Не удалось открыть камеру: " + e.getMessage(),
+            Toast.makeText(this, getString(R.string.toast_camera_open_failed, e.getMessage()),
                     Toast.LENGTH_LONG).show();
             finish();
         }
@@ -381,7 +381,7 @@ public class QrScanActivity extends Activity {
                     } catch (Exception e) {
                         if (!finished) {
                             Toast.makeText(QrScanActivity.this,
-                                    "Ошибка превью: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                                    getString(R.string.toast_preview_error, e.getMessage()), Toast.LENGTH_LONG).show();
                             finish();
                         }
                     }
@@ -390,7 +390,7 @@ public class QrScanActivity extends Activity {
                 public void onConfigureFailed(CameraCaptureSession s) {
                     LogStore.add("QR", "ОШИБКА: сессия камеры не настроилась");
                     if (!finished) {
-                        Toast.makeText(QrScanActivity.this, "Камера не настроилась",
+                        Toast.makeText(QrScanActivity.this, getString(R.string.toast_cam_session_failed),
                                 Toast.LENGTH_LONG).show();
                         finish();
                     }
@@ -398,7 +398,7 @@ public class QrScanActivity extends Activity {
             }, cameraHandler);
         } catch (Exception e) {
             if (!finished) {
-                Toast.makeText(this, "Ошибка сессии камеры: " + e.getMessage(),
+                Toast.makeText(this, getString(R.string.toast_cam_session_error, e.getMessage()),
                         Toast.LENGTH_LONG).show();
                 finish();
             }
@@ -422,7 +422,7 @@ public class QrScanActivity extends Activity {
         } catch (Exception e) {
             torchOn = false;
             LogStore.add("QR", "фонарик недоступен: " + e.getMessage());
-            Toast.makeText(this, "Фонарик недоступен: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_torch_error, e.getMessage()), Toast.LENGTH_SHORT).show();
         }
     }
 
