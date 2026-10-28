@@ -156,3 +156,10 @@ steps.
 
 This is a personal VPN client. You are responsible for complying with the laws
 of your jurisdiction and with the terms of service of any servers you connect to.
+
+## License
+
+The application code is released under the [GNU GPLv3](LICENSE). Bundled
+third-party components keep their own licenses: xray-core (MPL-2.0),
+wireguard-go and amneziawg-go (MIT), OpenVPN 2.6.14 (GPLv2, linked as a
+separate binary), jsch (BSD-style), zxing (Apache-2.0).
