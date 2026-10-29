@@ -285,6 +285,9 @@
     <string name="log_svc_82">"Server route: "</string>
     <string name="log_svc_83">==== Disconnect ====</string>
     <string name="log_svc_84">VPN revoked by the system (onRevoke) — boot/crash restore disabled</string>
+    <string name="log_svc_85">"Network changed: "</string>
+    <string name="log_svc_86">" — tunnel kept running (engine rebinds on its own)"</string>
+    <string name="log_svc_87">tunnel engine cannot send packets for 90s+ — recreating the tunnel</string>
     <string name="log_logs_01">Verbose log enabled</string>
     <string name="log_logs_02">Verbose log disabled</string>
     <string name="log_main_01">"b64 decode error: "</string>

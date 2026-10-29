@@ -35,6 +35,46 @@ public class AwgRunner {
     private volatile boolean engineRunning = false;
     private Thread logPoller;
 
+    // ---- Сторож «движок не может отправлять» --------------------------------
+    // Серия E:-строк «Failed to send …» = мёртвый маршрут под защищёнными
+    // (protect) сокетами: например, после смены сети самовосстановление не
+    // сработало. Серия тянется, пока ошибки появляются чаще, чем раз в
+    // SEND_FAIL_GAP_MS; если она длится дольше SEND_FAIL_EPISODE_MS — один раз
+    // зовём onPersistentSendFailure (сервис пересоздаёт туннель, не чаще
+    // раза в несколько минут — его сторона). Короткие всплески при обычном
+    // обрыве сети (1-10 с до возврата маршрута или до грейс-глушения) серию
+    // не набирают и НЕ вызывают перезапуск.
+    private static final long SEND_FAIL_EPISODE_MS = 90_000;
+    private static final long SEND_FAIL_GAP_MS = 60_000;
+    private volatile Runnable onPersistentSendFailure;
+    private volatile long sendFailFirstMs;
+    private volatile long sendFailLastMs;
+
+    /** Колбэк «движок 90+ с подряд не может отправлять пакеты» (один раз на
+     *  серию; вызывается из потока поллера журнала). */
+    public void setOnPersistentSendFailure(Runnable r) {
+        onPersistentSendFailure = r;
+    }
+
+    private void noteSendFailure() {
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (sendFailFirstMs == 0 || now - sendFailLastMs > SEND_FAIL_GAP_MS) {
+            sendFailFirstMs = now; // новая серия (или пауза слишком длинная)
+        }
+        sendFailLastMs = now;
+        if (now - sendFailFirstMs >= SEND_FAIL_EPISODE_MS) {
+            sendFailFirstMs = 0; // одна сигнализация на серию
+            Runnable r = onPersistentSendFailure;
+            if (r != null) {
+                try {
+                    r.run();
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+    // --------------------------------------------------------------------------
+
     public AwgRunner(IntConsumer protect, BooleanSupplier verboseSupplier, Listener listener) {
         this.protect = protect;
         this.verboseSupplier = verboseSupplier;
@@ -118,6 +158,9 @@ public class AwgRunner {
                 }
                 if (!verbose && line.startsWith("V:")) {
                     continue;
+                }
+                if (line.startsWith("E:") && line.contains("Failed to send")) {
+                    noteSendFailure();
                 }
                 LogStore.add("Awg", line);
             }

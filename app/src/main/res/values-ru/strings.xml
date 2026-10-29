@@ -285,6 +285,9 @@
     <string name="log_svc_82">"Маршрут сервера: "</string>
     <string name="log_svc_83">==== Отключение ====</string>
     <string name="log_svc_84">VPN отозван системой (onRevoke) — восстановление при загрузке/падении выключено</string>
+    <string name="log_svc_85">"сменилась сеть: "</string>
+    <string name="log_svc_86">" — туннель не пересоздаю (движок переедет сам)"</string>
+    <string name="log_svc_87">движок туннеля 90+ с не может отправлять пакеты — пересоздаю туннель</string>
     <string name="log_logs_01">Подробный журнал включён</string>
     <string name="log_logs_02">Подробный журнал выключен</string>
     <string name="log_main_01">"ОШИБКА b64-декода: "</string>

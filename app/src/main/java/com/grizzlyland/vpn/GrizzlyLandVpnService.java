@@ -67,6 +67,32 @@ public class GrizzlyLandVpnService extends VpnService {
      *  (UDP-сокеты движка перепривязываются). */
     private android.net.ConnectivityManager.NetworkCallback wgNetCallback;
     private android.net.Network wgLastNetwork;
+    /** Метка сети wgLastNetwork для строки «сменилась сеть: A → B». */
+    private String wgLastNetworkLabel = "";
+    /** Последний сторожевой перезапуск WG/AWG (анти-шторм: не чаще раза в 5 мин). */
+    private long lastWgSendStallReconnectMs;
+
+    /** Сторож WgRunner/AwgRunner: движку 90+ с подряд не удаётся отправлять
+     *  пакеты (мёртвый маршрут под защищёнными сокетами — самовосстановление
+     *  после смены сети не сработало). Один раз пересоздаём туннель; чаще раза
+     *  в 5 минут не реагируем. Вызывается из потока поллера движка — уводим на
+     *  main-поток. Грейс-пауза и ожидание сети разбираются сами, туда не лезем. */
+    private void onWgSendStall() {
+        mainHandler.post(() -> {
+            if (!connected || waitingNetwork || netLostNotified) {
+                return;
+            }
+            long now = android.os.SystemClock.elapsedRealtime();
+            if (now - lastWgSendStallReconnectMs < 5 * 60_000L) {
+                return;
+            }
+            lastWgSendStallReconnectMs = now;
+            LogStore.add("Wg", L10n.s(R.string.log_svc_87));
+            Intent i = new Intent(GrizzlyLandVpnService.this, GrizzlyLandVpnService.class);
+            i.setAction(ACTION_RECONNECT);
+            startService(i);
+        });
+    }
     /** Эпоха старта: инвалидирует асинхронный старт WG-через-Xray при
      *  disconnect/реконнекте (резолв endpoint'а идёт в рабочем потоке). */
     /** Ретраи старта WG (режим 5) при транзиентных ошибках (резолв endpoint'а,
@@ -558,8 +584,10 @@ public class GrizzlyLandVpnService extends VpnService {
 
     /** Сеть пропала (или потеряла интернет): если это надолго — через грейс-паузу
      *  глушим туннель и переходим в ожидание; если сеть вернулась в паузу —
-     *  тихо возвращаем обычный статус (туннель само восстановился). */
-    private void maybeHandleNetworkLoss() {
+     *  тихо возвращаем обычный статус (туннель само восстановился).
+     *  Потери сетей, ни на что не повлиявшие (под VPN работает другая сеть),
+     *  молчат: строка в журнале появляется только при старте грейс-паузы. */
+    private void maybeHandleNetworkLoss(String sourceLabel) {
         if (!connected || waitingNetwork) {
             return;
         }
@@ -571,7 +599,9 @@ public class GrizzlyLandVpnService extends VpnService {
         }
         netLostNotified = true;
         updateNotification(getString(R.string.notif_network_lost));
-        LogStore.add("Service", L10n.s(R.string.log_svc_31)
+        // Одна строка вместо двух: что умерло + что делаем.
+        LogStore.add("Service", L10n.s(R.string.log_svc_44) + sourceLabel + ". "
+                + L10n.s(R.string.log_svc_31)
                 + (NET_LOST_GRACE_MS / 1000) + L10n.s(R.string.log_svc_32)
                 + L10n.s(R.string.log_svc_33));
         mainHandler.removeCallbacks(netLostGraceRunnable);
@@ -654,11 +684,12 @@ public class GrizzlyLandVpnService extends VpnService {
             connWatchCallback = new android.net.ConnectivityManager.NetworkCallback() {
                 @Override
                 public void onAvailable(android.net.Network network) {
+                    // Без безусловного лога: появления сетей, на которые мы не
+                    // реагируем (подключены через другую сеть; Android сам
+                    // выключает мобильные данные при подключении Wi-Fi и т.п.),
+                    // заспамливали журнал. Значимые переходы логирует
+                    // maybeHandleNetworkReturn (ожидание сети / грейс-пауза).
                     android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(network);
-                    LogStore.add("Service", L10n.s(R.string.log_svc_41) + networkLabel(caps)
-                            + (caps != null && caps.hasCapability(
-                                    android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-                                    ? L10n.s(R.string.log_svc_42) : L10n.s(R.string.log_svc_43)));
                     maybeHandleNetworkReturn(caps);
                 }
 
@@ -669,16 +700,15 @@ public class GrizzlyLandVpnService extends VpnService {
                             && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
                         maybeHandleNetworkReturn(caps);
                     } else {
-                        maybeHandleNetworkLoss();
+                        maybeHandleNetworkLoss(networkLabel(caps));
                     }
                 }
 
                 @Override
                 public void onLost(android.net.Network network) {
                     android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(network);
-                    LogStore.add("Service", L10n.s(R.string.log_svc_44)
-                            + (caps == null ? L10n.s(R.string.log_svc_45) : networkLabel(caps)));
-                    maybeHandleNetworkLoss();
+                    maybeHandleNetworkLoss(caps == null
+                            ? L10n.s(R.string.log_svc_45) : networkLabel(caps));
                 }
             };
             cm.registerNetworkCallback(req, connWatchCallback);
@@ -851,6 +881,9 @@ public class GrizzlyLandVpnService extends VpnService {
                 }
             }
         });
+        // Страховка на случай, если самовосстановление после смены сети не
+        // сработало (мёртвый маршрут под защищёнными сокетами 90+ с).
+        wgRunner.setOnPersistentSendFailure(this::onWgSendStall);
         wgRunner.start(tunFd, cfg.ipc);
     }
 
@@ -916,6 +949,8 @@ public class GrizzlyLandVpnService extends VpnService {
                 }
             }
         });
+        // Страховка как у WgRunner: мёртвый маршрут 90+ с → один пересоздаёт туннель.
+        awgRunner.setOnPersistentSendFailure(this::onWgSendStall);
         awgRunner.start(tunFd, cfg.ipc);
     }
 
@@ -1167,9 +1202,26 @@ public class GrizzlyLandVpnService extends VpnService {
     }
 
     /**
-     * Смена сети на телефоне: UDP-сокеты движка привязаны к умершему интерфейсу.
-     * Простейший корректный ответ (как в официальном приложении) — пересоздать
-     * туннель целиком через штатный RECONNECT.
+     * Смена default-сети на телефоне. Раньше здесь туннель пересоздавался при
+     * КАЖДОЙ смене default-сети — в том числе на сеть БЕЗ интернета (Wi-Fi
+     * только подключился и ещё не прошёл валидацию; мобильная сеть появилась,
+     * но не проверена). Лог юзера 29.10: 10 рестартов за 2 дня, все — на
+     * непроверенную сеть; каждый рестарт рвал рабочий путь, будил движок,
+     * порождал bursts «network is unreachable» и ломал грейс-паузу 10с
+     * (туннель глушился через секунду после «держу туннель ещё 10с»).
+     *
+     * Теперь:
+     *  - WireGuard/AmneziaWG (режимы 5/7): туннель НЕ пересоздаём вовсе.
+     *    Защищённые (protect) сокеты движка не привязаны к интерфейсу —
+     *    маршрут ищется заново на каждый sendmsg, поэтому движок сам переезжает
+     *    на новый default и поднимает handshake (проверено живьём 20-22.10:
+     *    авиарежим 30с, выключение/включение Wi-Fi — самовосстановление без
+     *    рестарта). Страховка — сторож в WgRunner/AwgRunner: если движку 90+ с
+     *    подряд не удаётся отправлять пакеты, сервис один раз пересоздаёт
+     *    туннель (onWgSendStall).
+     *  - WireGuard-через-Xray (режим 6): самовосстановление внутреннего wg-out
+     *    не доказано — рестарт остался, но ТОЛЬКО на сеть с интернетом
+     *    (VALIDATED) и не во время грейс-паузы.
      */
     private void registerWgNetworkCallback() {
         if (wgNetCallback != null) {
@@ -1192,21 +1244,43 @@ public class GrizzlyLandVpnService extends VpnService {
                             && caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) {
                         return;
                     }
-                    // Только дефолтная сеть (registerDefaultNetworkCallback):
-                    // перезапуск нужен один раз при реальной смене сети, иначе
-                    // колбэк по каждой сети (Wi-Fi + LTE) даёт цикл рестартов.
-                    if (wgLastNetwork != null && !network.equals(wgLastNetwork)
-                            && connected
-                            && (ConfigManager.MODE_WG.equals(config.getMode())
-                                || ConfigManager.MODE_WG_XRAY.equals(config.getMode())
-                                || ConfigManager.MODE_AWG.equals(config.getMode()))) {
+                    android.net.Network previous = wgLastNetwork;
+                    String previousLabel = wgLastNetworkLabel;
+                    wgLastNetwork = network;
+                    wgLastNetworkLabel = networkLabel(caps);
+                    if (!connected || previous == null || previous.equals(network)) {
+                        return;
+                    }
+                    boolean validated = caps != null
+                            && caps.hasCapability(
+                                    android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+                    if (!validated) {
+                        // Сеть без интернета (валидация ещё не прошла или не
+                        // прошла вовсе) — туннель не трогаем: рестарт сюда =
+                        // выкинуть рабочий путь и стрелять в никуда.
+                        return;
+                    }
+                    if (netLostNotified) {
+                        // Идёт грейс-пауза после потери сети — пусть она разрулит:
+                        // возврат интернета отменит глушение, долгая потеря —
+                        // погасит туннель и перейдёт в ожидание.
+                        return;
+                    }
+                    if (ConfigManager.MODE_WG.equals(config.getMode())
+                            || ConfigManager.MODE_AWG.equals(config.getMode())) {
+                        // Рестарт не нужен: движок сам переедет на новый default
+                        // (см. комментарий метода). Одна строка на РЕАЛЬНУЮ смену
+                        // сети с интернетом — чтобы смена была видна в журнале.
+                        LogStore.add("Wg", L10n.s(R.string.log_svc_85) + previousLabel
+                                + " → " + wgLastNetworkLabel
+                                + L10n.s(R.string.log_svc_86));
+                    } else if (ConfigManager.MODE_WG_XRAY.equals(config.getMode())) {
                         LogStore.add("Wg", L10n.s(R.string.log_svc_76));
                         Intent i = new Intent(GrizzlyLandVpnService.this,
                                 GrizzlyLandVpnService.class);
                         i.setAction(ACTION_RECONNECT);
                         startService(i);
                     }
-                    wgLastNetwork = network;
                 }
             };
             cm.registerDefaultNetworkCallback(wgNetCallback);
@@ -1226,6 +1300,7 @@ public class GrizzlyLandVpnService extends VpnService {
             wgNetCallback = null;
         }
         wgLastNetwork = null;
+        wgLastNetworkLabel = "";
     }
 
     /**
