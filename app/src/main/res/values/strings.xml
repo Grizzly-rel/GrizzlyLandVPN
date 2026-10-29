@@ -183,6 +183,8 @@
     <string name="notif_connected">VPN active</string>
     <string name="notif_waiting_internet">Waiting for internet…</string>
     <string name="notif_network_lost">Network lost — waiting…</string>
+    <string name="notif_disconnected">VPN disconnected</string>
+    <string name="action_connect">Connect</string>
 
     <!-- ==== Лог/диагностика нашего кода (LogStore, lastError, исключения) ==== -->
     <string name="log_awgp_01">"Obfuscation parameter "</string>

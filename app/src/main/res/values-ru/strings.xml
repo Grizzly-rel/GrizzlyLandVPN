@@ -183,6 +183,8 @@
     <string name="notif_connected">VPN активен</string>
     <string name="notif_waiting_internet">Жду появления интернета…</string>
     <string name="notif_network_lost">Сеть пропала — жду…</string>
+    <string name="notif_disconnected">VPN отключён</string>
+    <string name="action_connect">Подключить</string>
 
     <!-- ==== Лог/диагностика нашего кода (LogStore, lastError, исключения) ==== -->
     <string name="log_awgp_01">"Параметр обфускации "</string>
