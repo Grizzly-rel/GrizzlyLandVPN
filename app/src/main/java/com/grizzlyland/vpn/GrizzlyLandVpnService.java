@@ -1616,6 +1616,9 @@ public class GrizzlyLandVpnService extends VpnService {
         Intent i = new Intent(ACTION_STATE_CHANGED);
         i.setPackage(getPackageName());
         sendBroadcast(i);
+        // Плитка в шторке (если добавлена): система разбудит VpnTileService,
+        // тот перечитает connected/serviceActive и перекрасится.
+        VpnTileService.requestUpdate(this);
     }
 
     /** Обновить текст существующего уведомления (без пересоздания канала). */
