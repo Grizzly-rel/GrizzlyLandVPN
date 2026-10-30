@@ -32,9 +32,11 @@ public class GrizzlyLandVpnService extends VpnService {
     public static final String ACTION_SET_DEBUG = "com.grizzlyland.vpn.SET_DEBUG";
 
     private static final String TAG = "GrizzlyLandVpnService";
+    // ОДИН канал на все состояния (подключено/подключение/жду сеть/отключено):
+    // смена канала при переходе idle↔active заставляла систему пересортировывать
+    // уведомление — в шторке оно «прыгало» при каждом подключении/отключении.
     private static final String CHANNEL_ID = "grizzlylandvpn";
     /** Канал уведомления «VPN отключён» (после пользовательского отключения). */
-    private static final String CHANNEL_ID_IDLE = "grizzlylandvpn_idle";
     private static final int NOTIF_ID = 1;
 
     /** Глобальный флаг: подключён ли VPN (для UI). */
@@ -227,6 +229,13 @@ public class GrizzlyLandVpnService extends VpnService {
     public void onCreate() {
         super.onCreate();
         L10n.init(this);
+        // Легаси-канал «отключено» (до объединения каналов): у уже установленных
+        // приложений он остаётся и висит в настройках — подчищаем.
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            nm.deleteNotificationChannel("grizzlylandvpn_idle");
+        } catch (Exception ignored) {
+        }
         serviceActive = true;
         installCrashRestart();
         registerConnectivityWatch();
@@ -1548,53 +1557,64 @@ public class GrizzlyLandVpnService extends VpnService {
             }
             vpnInterface = null;
         }
-        stopForeground(true);
         // После отключения ПОЛЬЗОВАТЕЛЕМ (кнопка уведомления/UI/плитка, отзыв
         // системой) оставляем в шторке уведомление «VPN отключён» с кнопкой
         // ПОДКЛЮЧИТЬ — как в OpenVPN for Android: из шторки должно быть чем
         // подключиться обратно. На фатальных ошибках и при ретраях
         // (wantConnected=true) уведомление не оставляем — там своя логика.
-        if (config != null && !config.getWantConnected()) {
-            postDisconnectedNotification();
+        boolean userDisconnect = config != null && !config.getWantConnected();
+        if (userDisconnect) {
+            // Порядок КРИТИЧЕН. Сначала nm.notify() с тем же NOTIF_ID и тем же
+            // каналом — обновляет существующее уведомление НА МЕСТЕ (как это
+            // делает OpenVPN for Android). И только потом снимаем foreground:
+            // STOP_FOREGROUND_DETACH оставляет уже опубликованное уведомление
+            // висеть, тогда как stopForeground(true) УДАЛЯЛ бы его — и уведомление
+            // исчезало и появлялось заново («мигало») при каждом отключении.
+            try {
+                NotificationManager nm =
+                        (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                nm.notify(NOTIF_ID, buildDisconnectedNotification());
+            } catch (Exception ignored) {
+            }
+            stopForeground(Service.STOP_FOREGROUND_DETACH);
+        } else {
+            stopForeground(true);
         }
         stopSelf();
     }
 
-    /** Уведомление «VPN отключён» с кнопкой ПОДКЛЮЧИТЬ. Переживает смерть
-     *  сервиса (публикуется через NotificationManager после stopForeground).
-     *  Отдельный канал IMPORTANCE_LOW: без звука и БЕЗ иконки в статус-баре —
-     *  «ключ» показывается только при живом VPN (требование 26.10). Не
-     *  ongoing — можно смахнуть, если мешает. Тап по ПОДКЛЮЧИТЬ →
-     *  ACTION_CONNECT: сервис стартует, startForeground() с тем же id
-     *  заменяет это уведомление на «Подключение…/VPN активен». */
-    private void postDisconnectedNotification() {
-        try {
-            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                NotificationChannel ch = new NotificationChannel(
-                        CHANNEL_ID_IDLE, "GrizzlyLandVPN", NotificationManager.IMPORTANCE_LOW);
-                nm.createNotificationChannel(ch);
-            }
-            Intent connectIntent = new Intent(this, GrizzlyLandVpnService.class);
-            connectIntent.setAction(ACTION_CONNECT);
-            PendingIntent connectPi = PendingIntent.getService(this, 1, connectIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            Intent openApp = new Intent(this, MainActivity.class);
-            PendingIntent appPi = PendingIntent.getActivity(this, 0, openApp,
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            Notification.Builder b = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                    ? new Notification.Builder(this, CHANNEL_ID_IDLE)
-                    : new Notification.Builder(this);
-            nm.notify(NOTIF_ID, b
-                    .setContentTitle("GrizzlyLandVPN")
-                    .setContentText(getString(R.string.notif_disconnected))
-                    .setSmallIcon(android.R.drawable.ic_lock_lock)
-                    .setOngoing(false)
-                    .setContentIntent(appPi)
-                    .addAction(android.R.drawable.ic_menu_send, getString(R.string.action_connect), connectPi)
-                    .build());
-        } catch (Exception ignored) {
+    /** Собрать уведомление «VPN отключён» с кнопкой ПОДКЛЮЧИТЬ. Публикуется в
+     *  disconnect() ДО stopForeground(DETACH) — чтобы обновить существующее
+     *  уведомление на месте, без удаления/пересоздания (без мигания).
+     *  Тот же канал CHANNEL_ID, что и у «активного» уведомления: без звука и
+     *  БЕЗ иконки в статус-баре — «ключ» показывается только при живом VPN
+     *  (требование 26.10). Не ongoing — можно смахнуть, если мешает. Тап по
+     *  ПОДКЛЮЧИТЬ → ACTION_CONNECT: сервис стартует, startForeground() с тем
+     *  же id и каналом заменяет это уведомление на «Подключение…/VPN активен». */
+    private Notification buildDisconnectedNotification() {
+        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel ch = new NotificationChannel(
+                    CHANNEL_ID, "GrizzlyLandVPN", NotificationManager.IMPORTANCE_LOW);
+            nm.createNotificationChannel(ch);
         }
+        Intent connectIntent = new Intent(this, GrizzlyLandVpnService.class);
+        connectIntent.setAction(ACTION_CONNECT);
+        PendingIntent connectPi = PendingIntent.getService(this, 1, connectIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Intent openApp = new Intent(this, MainActivity.class);
+        PendingIntent appPi = PendingIntent.getActivity(this, 0, openApp,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Notification.Builder b = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? new Notification.Builder(this, CHANNEL_ID)
+                : new Notification.Builder(this);
+        return b.setContentTitle("GrizzlyLandVPN")
+                .setContentText(getString(R.string.notif_disconnected))
+                .setSmallIcon(android.R.drawable.ic_lock_lock)
+                .setOngoing(false)
+                .setContentIntent(appPi)
+                .addAction(android.R.drawable.ic_menu_send, getString(R.string.action_connect), connectPi)
+                .build();
     }
 
     /** VPN отозван системой: пользователь выключил в настройках Android либо
