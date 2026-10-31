@@ -1,0 +1,25 @@
+GrizzlyLandVPN is an open-source Android VPN client that combines several VPN engines in one app: Xray (VLESS/Reality), OpenVPN, WireGuard and AmneziaWG. Seven connection modes, per-app split tunneling, no root required.
+
+MODES
+• Xray — VLESS/Reality through the embedded Xray core (TUN passed directly to the core, no root hacks).
+• OpenVPN — native OpenVPN 2.x engine; TAP servers are supported too (in-app L2 emulation).
+• OpenVPN through Xray — the OpenVPN tunnel is carried through a local VLESS/Reality proxy.
+• OpenVPN over SSH — OpenVPN wrapped into an SSH session with host key pinning (TOFU + SHA-256).
+• WireGuard — userspace wireguard-go engine with standard wg-quick .conf files: paste, import a file, or scan a QR code. Key pair generation is built in.
+• WireGuard over Xray — WireGuard hidden inside a VLESS/Reality tunnel for networks where plain WireGuard does not pass.
+• AmneziaWG — WireGuard with the AmneziaWG obfuscation layer (junk packets and header protection); accepts standard AmneziaWG configs.
+
+FEATURES
+• Per-app split tunneling: choose which apps go through the tunnel, or route the whole phone with one switch.
+• Auto-restore: the tunnel comes back after a reboot, a crash or an app update; manual disconnect turns it off.
+• Network-aware: honest "waiting for internet" state, a short grace period on network loss, and automatic recovery without needless tunnel restarts.
+• Quick Settings tile: connect/disconnect straight from the shade.
+• The notification stays after a manual disconnect with a Connect button — and it never blinks: one notification is updated in place for the whole session.
+• Config import/export (text, file, QR), built-in WireGuard/AmneziaWG key generation.
+• Full settings export/import as a single JSON file.
+• Connection log with optional verbose mode; English and Russian interface.
+• Runs on Android 7.0 through 15 (arm64-v8a).
+
+OPEN SOURCE
+The app is licensed under GPLv3. Source code: https://github.com/Grizzly-rel/GrizzlyLandVPN
+No accounts, no analytics, no trackers — just the VPN client.

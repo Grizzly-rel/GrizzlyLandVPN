@@ -1,0 +1,5 @@
+- WireGuard/AWG: no more tunnel restarts on network changes; send-stall watchdog
+- 10-second network-loss grace period works as intended
+- Quieter connection log
+- Quick Settings tile
+- Notification stays after manual disconnect with a Connect button (no flicker)
