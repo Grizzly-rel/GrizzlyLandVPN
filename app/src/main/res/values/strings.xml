@@ -1,0 +1,420 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name is intentionally locale-neutral. -->
+    <string name="app_name">GrizzlyLandVPN</string>
+
+    <!-- ==== Common ==== -->
+    <string name="action_disconnect">Disconnect</string>
+    <string name="settings">Settings</string>
+    <string name="btn_save">Save</string>
+    <string name="toast_saved">Saved</string>
+    <string name="toast_bad_port">Invalid port</string>
+    <string name="btn_close">Close</string>
+    <string name="toast_export_error">Export error: %1$s</string>
+    <string name="toast_import_error">Import error: %1$s</string>
+
+    <!-- ==== MainActivity ==== -->
+    <string name="select_apps_btn">Select apps</string>
+    <string name="logs_btn">Logs</string>
+    <string name="toast_settings_imported">Settings imported</string>
+    <string name="connect_fmt">Connect (%1$s)</string>
+    <string name="connect_configure">Connect (configure settings)</string>
+    <string name="status_mode">Mode: %1$s</string>
+    <string name="status_ssh">SSH: %1$s (%2$s)</string>
+    <string name="status_ovpn_via_ssh">OpenVPN (via SSH): %1$s</string>
+    <string name="status_wg">WireGuard: %1$s</string>
+    <string name="status_config_set">config set</string>
+    <string name="status_config_missing">config not set</string>
+    <string name="status_endpoint">Endpoint: %1$s</string>
+    <string name="status_peer">Peer: %1$d, addresses: %2$d</string>
+    <string name="status_not_set">(not set)</string>
+    <string name="status_awg">AmneziaWG: %1$s</string>
+    <string name="status_obfuscation">Obfuscation: %1$s</string>
+    <string name="status_wg_endpoint">WG Endpoint: %1$s</string>
+    <string name="status_xray_wrap">Xray (wrapper): %1$s</string>
+    <string name="status_xray">Xray: %1$s</string>
+    <string name="status_xray_socks">Xray SOCKS: 127.0.0.1:%1$s</string>
+    <string name="status_openvpn">OpenVPN: %1$s</string>
+    <string name="status_all_apps">Apps: whole device</string>
+    <string name="status_apps_count">Selected apps: %1$d</string>
+    <string name="status_waiting_network">No network — waiting for internet (will connect automatically)</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_error">Error: %1$s</string>
+    <string name="mode_xray_ovpn">OpenVPN via Xray</string>
+    <string name="mode_ovpn_ssh">OpenVPN via SSH</string>
+    <string name="mode_wg_xray">WireGuard via Xray</string>
+
+    <!-- ==== SettingsActivity ==== -->
+    <string name="mode_heading">Operating mode</string>
+    <string name="toast_mode_saved">Mode saved: %1$s</string>
+    <string name="xray_settings">Xray settings</string>
+    <string name="openvpn_settings">OpenVPN settings</string>
+    <string name="ssh_settings">SSH settings</string>
+    <string name="wg_settings">WireGuard settings</string>
+    <string name="awg_settings">AmneziaWG settings</string>
+    <string name="export_all_btn">Export all settings</string>
+    <string name="import_all_btn">Import all settings</string>
+    <string name="toast_all_exported">All settings exported</string>
+    <string name="toast_all_imported">All settings imported</string>
+
+    <!-- ==== XraySettingsActivity ==== -->
+    <string name="btn_import_xray">Import Xray</string>
+    <string name="btn_export_xray">Export Xray</string>
+    <string name="label_protocol">Protocol</string>
+    <string name="label_address">Server address</string>
+    <string name="label_port">Port</string>
+    <string name="label_socks_port">Local SOCKS port (for apps)</string>
+    <string name="label_id">UUID / password / id</string>
+    <string name="label_transport">Transport</string>
+    <string name="label_path">Path (for ws/http)</string>
+    <string name="label_host_sni">Host / SNI (for ws/tls)</string>
+    <string name="label_dns_servers">DNS servers (comma-separated; tcp://, https:// DoH, ip:853 DoT allowed)</string>
+    <string name="label_alpn">ALPN (comma-separated, e.g. h2,http/1.1)</string>
+    <string name="label_header_type">Header type (tcp/kcp, e.g. http)</string>
+    <string name="label_domain_strategy">domainStrategy (e.g. UseIP)</string>
+    <string name="label_allow_insecure">allowInsecure (allow untrusted certificate)</string>
+    <string name="label_custom_json">Custom Xray JSON config (optional).\nIf set, the \"Xray\" mode uses it as is (inbounds are replaced with the tun inbound). An outbounds block is required.\nCan be imported with the \"Import Xray\" button above.</string>
+    <string name="toast_xray_exported">Xray settings exported</string>
+    <string name="toast_xray_imported">Xray settings imported</string>
+
+    <!-- ==== OpenVpnSettingsActivity ==== -->
+    <string name="btn_import_ovpn">Import .ovpn</string>
+    <string name="btn_export_ovpn">Export .ovpn</string>
+    <string name="label_cipher">Cipher</string>
+    <string name="label_ca">CA certificate (-----BEGIN CERTIFICATE-----)</string>
+    <string name="label_static_key">Static key (--secret, if PKI is not used)</string>
+    <string name="label_mtu">MTU (tun-mtu, e.g. 1400)</string>
+    <string name="label_mssfix">MSS-fix (mssfix, e.g. 1450)</string>
+    <string name="label_ovpn_dns">OpenVPN DNS servers (comma-separated)</string>
+    <string name="label_dev">Device (dev): tun = L3, tap = L2 bridge (TapShim)</string>
+    <string name="label_remote_cert_tls">remote-cert-tls (e.g. server)</string>
+    <string name="label_compress">Compression (compress/comp-lzo, e.g. lzo)</string>
+    <string name="label_routes">Routes (route, comma-separated: 192.168.5.0 255.255.255.0)</string>
+    <string name="label_redirect_gateway">redirect-gateway (all traffic through the tunnel)</string>
+    <string name="label_key_password">Private key password (if encrypted)</string>
+    <string name="label_username">Username (auth-user-pass, if required)</string>
+    <string name="label_password">Password (auth-user-pass)</string>
+    <string name="label_verb">verb (log verbosity, e.g. 3; use 5 for verbose log)</string>
+    <string name="toast_ovpn_exported">.ovpn config exported</string>
+    <string name="toast_ovpn_imported">.ovpn config imported</string>
+
+    <!-- ==== SshSettingsActivity ==== -->
+    <string name="hint_ssh">The \"OpenVPN via SSH\" mode: the phone connects to an SSH server and reaches its OpenVPN port through a local forward (like ssh -L). NOTE: the OpenVPN server must listen on proto tcp — SSH forwards TCP only.</string>
+    <string name="label_ssh_host">SSH server (host or IP)</string>
+    <string name="label_ssh_port">SSH port (usually 22)</string>
+    <string name="label_ssh_user">User</string>
+    <string name="label_auth">Authentication</string>
+    <string name="auth_password">Password</string>
+    <string name="auth_key">Key (PEM/OpenSSH)</string>
+    <string name="label_ssh_password">Password (for password auth)</string>
+    <string name="label_ssh_key">Private key (for key auth)</string>
+    <string name="label_ssh_key_pass">Key passphrase (if any)</string>
+    <string name="label_ssh_target">Forward target host:port (OpenVPN on the server side)</string>
+    <string name="label_ssh_local_port">Local forward port (default 11940)</string>
+    <string name="label_hostkey_fp">Host key fingerprint: %1$s</string>
+    <string name="fp_not_recorded">(not recorded)</string>
+    <string name="btn_forget_fp">Forget host key fingerprint</string>
+    <string name="toast_fp_reset">Fingerprint reset — it will be pinned on the next connection</string>
+    <string name="toast_ssh_saved">SSH settings saved</string>
+    <string name="toast_ports_nan">Ports must be numbers</string>
+
+    <!-- ==== WgSettingsActivity / AwgSettingsActivity (shared) ==== -->
+    <string name="btn_import_conf">Import .conf</string>
+    <string name="btn_export_conf">Export .conf</string>
+    <string name="btn_scan_qr">Scan QR</string>
+    <string name="btn_show_qr">Show QR</string>
+    <string name="btn_generate_keys">Generate keys</string>
+    <string name="toast_qr_empty">QR scanned but the text is empty</string>
+    <string name="toast_conf_from_qr">Config imported from QR</string>
+    <string name="toast_conf_exported">.conf config exported</string>
+    <string name="toast_conf_imported">.conf config imported</string>
+    <string name="toast_conf_empty">Config is empty — nothing to show</string>
+    <string name="toast_qr_gen_error">QR generation error: %1$s</string>
+    <string name="toast_keygen_error">Key generation error: %1$s</string>
+    <string name="toast_keys_generated">Keys generated — do not forget to save</string>
+    <string name="label_pubkey">Interface PublicKey (add it on the server):\n%1$s</string>
+    <string name="incomplete_with_details">, but the config is incomplete ([Interface] PrivateKey and [Peer] PublicKey are required)</string>
+    <string name="incomplete_prefix">, but the config is incomplete</string>
+    <string name="incomplete_details">([Interface] PrivateKey and [Peer] PublicKey are required)</string>
+    <string name="saved_incomplete_prefix">Saved, but the config is incomplete</string>
+
+    <!-- Save only via the Save button: import/QR just fill the form (ConfigValidation) -->
+    <string name="svc_wg">WireGuard</string>
+    <string name="svc_awg">AmneziaWG</string>
+    <string name="svc_xray">Xray</string>
+    <string name="svc_ovpn">OpenVPN</string>
+    <string name="svc_ssh">SSH</string>
+    <string name="toast_import_staged">Loaded into the form. Nothing is saved until you press Save</string>
+    <string name="warn_import_not_looks_like">Loaded into the form, but this does not look like a %1$s config — check it before saving</string>
+    <string name="toast_conf_cleared">Config cleared</string>
+    <string name="err_not_saved_title">NOT saved</string>
+    <string name="err_wg_no_iface">no [Interface] section</string>
+    <string name="err_wg_no_private_key">no PrivateKey in [Interface]</string>
+    <string name="err_wg_no_peer">no [Peer] section with PublicKey</string>
+    <string name="err_wg_peer_no_pubkey">no PublicKey in [Peer]</string>
+    <string name="err_xray_no_address">server address (Address) is empty</string>
+    <string name="err_xray_no_id">user ID (uuid/password) is empty</string>
+    <string name="err_xray_bad_json">Custom JSON is not valid JSON</string>
+    <string name="err_port_empty">%1$s: port is empty</string>
+    <string name="err_port_bad">%1$s: must be a number 1–65535</string>
+    <string name="err_ovpn_no_remote">no server address (remote directive or Remote host field)</string>
+    <string name="err_ovpn_no_key_material">no CA / certificate / static key found</string>
+    <string name="err_ssh_no_host">SSH host is empty</string>
+    <string name="err_ssh_no_key">key auth selected, but the key is empty</string>
+
+    <!-- ==== WgSettingsActivity ==== -->
+    <string name="hint_wg">Paste a config in wg-quick format (as in a standard .conf): [Interface] with PrivateKey/Address/DNS and [Peer] with PublicKey/Endpoint/AllowedIPs. You can generate keys with the button below — then add the public key on the server as a Peer.</string>
+    <string name="label_wg_raw">wg-quick config</string>
+    <string name="toast_wg_saved">WireGuard config saved</string>
+    <string name="qr_dialog_title_wg">WireGuard config — QR</string>
+    <string name="qr_dialog_note_wg">Scan this QR in WireGuard (or in this app) on another device</string>
+
+    <!-- ==== AwgSettingsActivity ==== -->
+    <string name="hint_awg">Paste a config in wg-quick format (as in a standard .conf): [Interface] with PrivateKey/Address/DNS and [Peer] with PublicKey/Endpoint/AllowedIPs. An AmneziaWG config may contain obfuscation parameters in [Interface] (Jc, Jmin, Jmax, S1, S2, H1..H4) — defaults are applied if absent. You can generate keys with the button below — then add the public key on the server as a Peer.</string>
+    <string name="label_awg_raw">wg-quick config (+ obfuscation parameters)</string>
+    <string name="toast_awg_saved">AmneziaWG config saved</string>
+    <string name="qr_dialog_title_awg">AmneziaWG config — QR</string>
+    <string name="qr_dialog_note_awg">Scan this QR in an AmneziaWG/WireGuard client (or in this app) on another device</string>
+
+    <!-- ==== AppSelectionActivity ==== -->
+    <string name="title_apps">Apps for VPN</string>
+    <string name="switch_all_apps">VPN for the whole device</string>
+    <string name="hint_all_on">ALL apps go through the VPN, the list below has no effect.</string>
+    <string name="hint_all_off">Check the apps that should go through the VPN (empty list = all apps).</string>
+
+    <!-- ==== LogsActivity ==== -->
+    <string name="title_logs">Connection log</string>
+    <string name="btn_copy">Copy</string>
+    <string name="btn_clear">Clear</string>
+    <string name="btn_debug_on">Verbose log: ON</string>
+    <string name="btn_debug_off">Verbose log: OFF</string>
+    <string name="toast_logs_copied">Logs copied</string>
+
+    <!-- ==== QrScanActivity ==== -->
+    <string name="qr_hint">Point the camera at a QR code with a WireGuard config</string>
+    <string name="btn_torch">Torch</string>
+    <string name="toast_no_cam_permission">Camera permission is required for scanning</string>
+    <string name="toast_camera_not_found">No camera found</string>
+    <string name="toast_camera_error">Camera error: %1$d</string>
+    <string name="toast_camera_open_failed">Failed to open the camera: %1$s</string>
+    <string name="toast_preview_error">Preview error: %1$s</string>
+    <string name="toast_cam_session_failed">Camera failed to configure</string>
+    <string name="toast_cam_session_error">Camera session error: %1$s</string>
+    <string name="toast_torch_error">Torch unavailable: %1$s</string>
+
+    <!-- ==== GrizzlyLandVpnService (notifications) ==== -->
+    <string name="notif_connecting">Connecting…</string>
+    <string name="notif_connected">VPN active</string>
+    <string name="notif_waiting_internet">Waiting for internet…</string>
+    <string name="notif_network_lost">Network lost — waiting…</string>
+    <string name="notif_disconnected">VPN disconnected</string>
+    <string name="action_connect">Connect</string>
+
+    <!-- ==== Лог/диагностика нашего кода (LogStore, lastError, исключения) ==== -->
+    <string name="log_awgp_01">"Obfuscation parameter "</string>
+    <string name="log_awgp_02">\" is not a number 0..4294967295</string>
+    <string name="log_awgp_03">) is greater than Jmax (</string>
+    <string name="log_awgp_04">default (no obfuscation)</string>
+    <string name="log_awgp_05">"key must be 32 bytes, got "</string>
+    <string name="log_arun_01">start(): engine already running — skipping</string>
+    <string name="log_arun_02">engine up (handle=</string>
+    <string name="log_arun_03">engine stopped (handle=</string>
+    <string name="log_arun_04">"engine stop error: "</string>
+    <string name="log_boot_01">Phone boot</string>
+    <string name="log_boot_02">Restart after process crash</string>
+    <string name="log_boot_03">App updated (reinstalled)</string>
+    <string name="log_boot_04">: VPN was not connected — not connecting</string>
+    <string name="log_boot_05">": VPN was connected — restoring (mode "</string>
+    <string name="log_boot_06">VPN consent not granted — not connecting (connect manually)</string>
+    <string name="log_boot_07">"Failed to start service from background: "</string>
+    <string name="log_svc_01">" — retrying in "</string>
+    <string name="log_svc_02">" s"</string>
+    <string name="log_svc_03">VpnService did not grant TUN (</string>
+    <string name="log_svc_04">") — retry in "</string>
+    <string name="log_svc_05">" s (after phone boot: waiting for screen unlock)"</string>
+    <string name="log_svc_06">ERROR: VpnService did not grant TUN (</string>
+    <string name="log_svc_07">VpnService did not grant TUN</string>
+    <string name="log_svc_08">Process died — VPN restart alarm in ~3s</string>
+    <string name="log_svc_09">Disconnected by user — boot/crash restore disabled</string>
+    <string name="log_svc_10">Restart after crash: VPN was not running — not connecting</string>
+    <string name="log_svc_11">WireGuard: verbose engine lines shown (filter removed)</string>
+    <string name="log_svc_12">WireGuard: verbose engine lines hidden</string>
+    <string name="log_svc_13">AmneziaWG: verbose engine lines shown (filter removed)</string>
+    <string name="log_svc_14">AmneziaWG: verbose engine lines hidden</string>
+    <string name="log_svc_15">Xray restarted (loglevel=</string>
+    <string name="log_svc_16">), TUN not recreated</string>
+    <string name="log_svc_17">"Xray restart error: "</string>
+    <string name="log_svc_18">connect(): interface already exists — skipping (</string>
+    <string name="log_svc_19">openvpn alive</string>
+    <string name="log_svc_20">openvpn not running</string>
+    <string name="log_svc_21">at connect time</string>
+    <string name="log_svc_22">"==== Connecting (mode: "</string>
+    <string name="log_svc_23">"Xray TUN start error: "</string>
+    <string name="log_svc_24">Network</string>
+    <string name="log_svc_25">VPN (our tun)</string>
+    <string name="log_svc_26">mobile network</string>
+    <string name="log_svc_27">network</string>
+    <string name="log_svc_28">No internet-capable network (</string>
+    <string name="log_svc_29">") — not raising TUN "</string>
+    <string name="log_svc_30">(no key icon), engines off; will connect automatically when internet appears</string>
+    <string name="log_svc_31">"No internet-capable network — keeping the tunnel for "</string>
+    <string name="log_svc_32">"s (short outages survive), "</string>
+    <string name="log_svc_33">then shutting it down until the network returns</string>
+    <string name="log_svc_34">" appeared, but internet is not validated yet — waiting for validation"</string>
+    <string name="log_svc_35">" with internet — connecting"</string>
+    <string name="log_svc_36">" is back — tunnel is working"</string>
+    <string name="log_svc_37">"No network for "</string>
+    <string name="log_svc_38">"s — shutting down the tunnel and engines until internet appears "</string>
+    <string name="log_svc_39">(the key icon will disappear, battery is spared)</string>
+    <string name="log_svc_40">network lost for good</string>
+    <string name="log_svc_41">"Network available: "</string>
+    <string name="log_svc_42">" (internet)"</string>
+    <string name="log_svc_43">" (no internet)"</string>
+    <string name="log_svc_44">"Network lost: "</string>
+    <string name="log_svc_45">interface disappeared</string>
+    <string name="log_svc_46">Network watching enabled (internet appeared → auto-connect)</string>
+    <string name="log_svc_47">"Network watching not registered: "</string>
+    <string name="log_svc_48">SSH: host/user not set (Settings → SSH settings)</string>
+    <string name="log_svc_49">"ERROR: "</string>
+    <string name="log_svc_50">SSH tunnel ready, local forward 127.0.0.1:</string>
+    <string name="log_svc_51">"OpenVPN start error (SSH mode): "</string>
+    <string name="log_svc_52">"SSH error: "</string>
+    <string name="log_svc_53">WG: invalid config</string>
+    <string name="log_svc_54">" (Settings → WireGuard settings)"</string>
+    <string name="log_svc_55">WG config: addresses=</string>
+    <string name="log_svc_56">WireGuard: tunnel is up</string>
+    <string name="log_svc_57">"WG error: "</string>
+    <string name="log_svc_58">network unavailable (endpoint resolution)</string>
+    <string name="log_svc_59">AWG: invalid config</string>
+    <string name="log_svc_60">" (Settings → AmneziaWG settings)"</string>
+    <string name="log_svc_61">AWG config: addresses=</string>
+    <string name="log_svc_62">" obfuscation jc="</string>
+    <string name="log_svc_63">AmneziaWG: tunnel is up</string>
+    <string name="log_svc_64">"AWG error: "</string>
+    <string name="log_svc_65">"WG config contains "</string>
+    <string name="log_svc_66">" peer — in the via-Xray mode only the first one is used ("</string>
+    <string name="log_svc_67">WG via Xray: endpoint=</string>
+    <string name="log_svc_68">" addresses="</string>
+    <string name="log_svc_69">WG via Xray start cancelled (state changed)</string>
+    <string name="log_svc_70">WG via Xray</string>
+    <string name="log_svc_71">"Xray start error (WG via Xray): "</string>
+    <string name="log_svc_72">Apps: whole device (the \"VPN for the whole device\" switch)</string>
+    <string name="log_svc_73">Apps: whole device (per-app list is empty)</string>
+    <string name="log_svc_74">"Per-app: selected apps: "</string>
+    <string name="log_svc_75">"route: "</string>
+    <string name="log_svc_76">network changed — restarting the WG tunnel</string>
+    <string name="log_svc_77">"NetworkCallback not registered: "</string>
+    <string name="log_svc_78">OpenVPN exited on its own — VPN disconnected</string>
+    <string name="log_svc_79">openvpn process exited</string>
+    <string name="log_svc_80">TUN created: ip=</string>
+    <string name="log_svc_81">" (state change)"</string>
+    <string name="log_svc_82">"Server route: "</string>
+    <string name="log_svc_83">==== Disconnect ====</string>
+    <string name="log_svc_84">VPN revoked by the system (onRevoke) — boot/crash restore disabled</string>
+    <string name="log_svc_85">"Network changed: "</string>
+    <string name="log_svc_86">" — tunnel kept running (engine rebinds on its own)"</string>
+    <string name="log_svc_87">tunnel engine cannot send packets for 90s+ — recreating the tunnel</string>
+    <string name="log_logs_01">Verbose log enabled</string>
+    <string name="log_logs_02">Verbose log disabled</string>
+    <string name="log_main_01">"b64 decode error: "</string>
+    <string name="log_main_02">Settings import via intent (</string>
+    <string name="log_main_03">" bytes)"</string>
+    <string name="log_main_04">"Intent import error: "</string>
+    <string name="log_main_05">VPN was connected before the restart, but VPN consent is not granted — auto-connect skipped</string>
+    <string name="log_main_06">"VPN was connected before the app restart — restoring (mode "</string>
+    <string name="log_mgmt_01">"Server pushes DNS: "</string>
+    <string name="log_mgmt_02">"Server pushes route: "</string>
+    <string name="log_mgmt_03">Network unavailable — not releasing hold, waiting for internet</string>
+    <string name="log_mgmt_04">" (will connect automatically when it appears)"</string>
+    <string name="log_mgmt_05">"Password request: "</string>
+    <string name="log_mgmt_06">TAP: TUN created after IFCONFIG: ip=</string>
+    <string name="log_mgmt_07">"TUN bind error in TAP: "</string>
+    <string name="log_mgmt_08">"Server pushes ROUTE: "</string>
+    <string name="log_mgmt_09">"IPv6 option skipped: "</string>
+    <string name="log_mgmt_10">TUN-fd diagnostics: fd=</string>
+    <string name="log_mgmt_11">OPENTUN ok, TUN-fd passed, ip=</string>
+    <string name="log_mgmt_12">OPENTUN ok (tap): L2 pair passed, waiting for IFCONFIG to create the TUN</string>
+    <string name="log_mgmt_13">" [auto: ARP failure falls back to tun]"</string>
+    <string name="log_mgmt_14">"TAP OPENTUN error: "</string>
+    <string name="log_mgmt_15">TAP mode confirmed (gateway ARP reply)</string>
+    <string name="log_mgmt_16">TAP: no gateway ARP reply — check the server/network</string>
+    <string name="log_orun_01">Live openvpn process found — restarting with the new config</string>
+    <string name="log_orun_02">Using the imported .ovpn (raw config)</string>
+    <string name="log_orun_03">SSH forward: remote → 127.0.0.1:</string>
+    <string name="log_orun_04">, proto tcp (retrying while SSH reconnects)</string>
+    <string name="log_orun_05">"Server interface mode: "</string>
+    <string name="log_orun_06">" (from the config dev directive)"</string>
+    <string name="log_orun_07">Starting OpenVPN, remote=</string>
+    <string name="log_orun_08">"Config:\n"</string>
+    <string name="log_orun_09">"ERROR: native openvpn binary unavailable: "</string>
+    <string name="log_orun_10">openvpn process exited, code=</string>
+    <string name="log_orun_11">openvpn process started</string>
+    <string name="log_orun_12">"OpenVPN stop error: "</string>
+    <string name="log_orun_13">OpenVPN stopped</string>
+    <string name="log_qr_01">StreamConfigurationMap unavailable</string>
+    <string name="log_qr_02">"camera "</string>
+    <string name="log_qr_03">", analysis frame "</string>
+    <string name="log_qr_04">", sensor "</string>
+    <string name="log_qr_05">camera session ready</string>
+    <string name="log_qr_06">ERROR: camera session failed to configure</string>
+    <string name="log_qr_07">"torch: "</string>
+    <string name="log_qr_08">on</string>
+    <string name="log_qr_09">off</string>
+    <string name="log_qr_10">"torch unavailable: "</string>
+    <string name="log_qr_11">frame #</string>
+    <string name="log_qr_12">"decode error: "</string>
+    <string name="log_qr_13">QR recognized (</string>
+    <string name="log_qr_14">" chars)"</string>
+    <string name="log_ssh_01">SSH session restored, forward 127.0.0.1:</string>
+    <string name="log_ssh_02">SSH session dropped</string>
+    <string name="log_ssh_03">"SSH error: "</string>
+    <string name="log_ssh_04">"Retry in "</string>
+    <string name="log_ssh_05">"s (attempt "</string>
+    <string name="log_ssh_06">"Failed to read the SSH private key "</string>
+    <string name="log_ssh_07">"(check the key and the key passphrase in SSH settings): "</string>
+    <string name="log_ssh_08">Auth: private key</string>
+    <string name="log_ssh_09">"Connecting to "</string>
+    <string name="log_ssh_10">SSH authentication failed (</string>
+    <string name="log_ssh_11">). Check the username/password/key in SSH settings.</string>
+    <string name="log_ssh_12">"Host key fingerprint saved (TOFU): "</string>
+    <string name="log_ssh_13">"SSH host key fingerprint CHANGED (was: "</string>
+    <string name="log_ssh_14">", now: "</string>
+    <string name="log_ssh_15">"). Possible MITM or server reinstall. "</string>
+    <string name="log_ssh_16">If the server was changed intentionally — reset the fingerprint in SSH settings.</string>
+    <string name="log_ssh_17">"Failed to bind the local port "</string>
+    <string name="log_ssh_18">SSH session established; forward 127.0.0.1:</string>
+    <string name="log_ssh_19">"protect(fd) failed: "</string>
+    <string name="log_tap_01">TUN bound to the shim</string>
+    <string name="log_tap_02">Network received: ip=</string>
+    <string name="log_tap_03">" mask="</string>
+    <string name="log_tap_04">" gateway="</string>
+    <string name="log_tap_05">Start (L2 pair active): mac=</string>
+    <string name="log_tap_06">" (network will arrive from IFCONFIG)"</string>
+    <string name="log_tap_07">" [TUN already bound]"</string>
+    <string name="log_tap_08">" — ARP detection of the tap server"</string>
+    <string name="log_tap_09">"TUN read error: "</string>
+    <string name="log_tap_10">"L2 pair read error: "</string>
+    <string name="log_tap_11">"ARP reply from "</string>
+    <string name="log_tap_12">) — TAP server confirmed</string>
+    <string name="log_tap_13">No IFCONFIG within 15s — falling back from TAP</string>
+    <string name="log_tap_14">" not received within "</string>
+    <string name="log_tap_15">s — the server is probably not TAP</string>
+    <string name="log_xcb_01">WireGuard config is invalid</string>
+    <string name="log_xcb_02">WireGuard config peer has no Endpoint</string>
+    <string name="log_xrun_01">Starting Xray (TUN), fd=</string>
+    <string name="log_xrun_02">Xray TUN started, version=</string>
+    <string name="log_xrun_03">Starting Xray (TUN+WG), fd=</string>
+    <string name="log_xrun_04">Xray TUN+WG started, version=</string>
+    <string name="log_xrun_05">ERROR: custom config is empty</string>
+    <string name="log_xrun_06">Empty Xray custom config (fill it in the settings)</string>
+    <string name="log_xrun_07">"ERROR: invalid JSON: "</string>
+    <string name="log_xrun_08">"Invalid JSON in the custom config: "</string>
+    <string name="log_xrun_09">ERROR: no outbounds in the custom config</string>
+    <string name="log_xrun_10">No outbounds in the custom config</string>
+    <string name="log_xrun_11">Starting Xray (custom), fd=</string>
+    <string name="log_xrun_12">Xray custom started, version=</string>
+    <string name="log_xrun_13">Starting Xray (SOCKS) on 127.0.0.1:</string>
+    <string name="log_xrun_14">Xray SOCKS started, version=</string>
+    <string name="log_xrun_15">"Xray stop error: "</string>
+    <string name="log_xrun_16">Xray stopped</string>
+</resources>

@@ -1,0 +1,22 @@
+# Signing secrets and keys - NEVER publish
+keystore/
+*.jks
+*.keystore
+keystore.properties
+
+# Build and caches
+build/
+.gradle/
+local.properties
+app/build/
+
+# IDE
+*.iml
+.idea/
+.vscode/
+
+# Local settings dumps (secrets!) - never commit
+/*config*.xml
+
+# Store listing materials (kept locally, not part of the source)
+fastlane/

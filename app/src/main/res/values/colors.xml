@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Фон адаптивной иконки = белый кант исходной картинки /opt/icon.png
+         (края 254,254,254). Заполняет маску лаунчера за пределами 72dp. -->
+    <color name="ic_launcher_background">#FEFEFE</color>
+</resources>
