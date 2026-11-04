@@ -7,11 +7,17 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.VpnService;
 import android.os.Bundle;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends Activity {
 
@@ -19,6 +25,14 @@ public class MainActivity extends Activity {
     private Button connectButton;
     private Button disconnectButton;
     private BroadcastReceiver stateReceiver;
+    private LinearLayout root;
+    private ScrollView scroll;
+    private TextView titleView;
+    /** Масштабируемые текстовые view главного экрана (заголовок, статус, кнопки)
+     *  и их базовые размеры в px: fitToScreen() ужимает их, когда контент не
+     *  влезает по высоте (длинный статус «куда и через что подключаемся»). */
+    private final List<TextView> scaledTexts = new ArrayList<>();
+    private final List<Float> scaledBasePx = new ArrayList<>();
 
     private void handleImportIntent(Intent intent) {
         String importJson = intent != null ? intent.getStringExtra("import_json") : null;
@@ -69,22 +83,24 @@ public class MainActivity extends Activity {
         // применяет настройки без файлового пикера. Только локальный intent от shell.
         handleImportIntent(getIntent());
 
-        LinearLayout root = new LinearLayout(this);
+        root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
         root.setPadding(40, 40, 40, 40);
 
-        TextView title = new TextView(this);
-        title.setText(getString(R.string.app_name));
-        title.setTextSize(28);
-        title.setGravity(Gravity.CENTER);
-        root.addView(title);
+        titleView = new TextView(this);
+        titleView.setText(getString(R.string.app_name));
+        titleView.setTextSize(28);
+        titleView.setGravity(Gravity.CENTER);
+        root.addView(titleView);
+        scaledTexts.add(titleView);
 
         statusText = new TextView(this);
         statusText.setTextSize(16);
         statusText.setGravity(Gravity.CENTER);
         statusText.setPadding(0, 30, 0, 30);
         root.addView(statusText);
+        scaledTexts.add(statusText);
 
         connectButton = new Button(this);
         connectButton.setOnClickListener(new View.OnClickListener() {
@@ -94,6 +110,7 @@ public class MainActivity extends Activity {
             }
         });
         root.addView(connectButton, lp());
+        scaledTexts.add(connectButton);
 
         Button selectApps = new Button(this);
         selectApps.setText(getString(R.string.select_apps_btn));
@@ -104,6 +121,7 @@ public class MainActivity extends Activity {
             }
         });
         root.addView(selectApps, lp());
+        scaledTexts.add(selectApps);
 
         Button settings = new Button(this);
         settings.setText(getString(R.string.settings));
@@ -114,6 +132,7 @@ public class MainActivity extends Activity {
             }
         });
         root.addView(settings, lp());
+        scaledTexts.add(settings);
 
         disconnectButton = new Button(this);
         disconnectButton.setText(getString(R.string.action_disconnect));
@@ -124,6 +143,7 @@ public class MainActivity extends Activity {
             }
         });
         root.addView(disconnectButton, lp());
+        scaledTexts.add(disconnectButton);
 
         Button logs = new Button(this);
         logs.setText(getString(R.string.logs_btn));
@@ -134,15 +154,68 @@ public class MainActivity extends Activity {
             }
         });
         root.addView(logs, lp());
+        scaledTexts.add(logs);
 
-        setContentView(root);
+        // Базовые размеры текста (px) для авто-масштаба — снимаем ПОСЛЕ полной
+        // сборки UI; дальше fitToScreen() крутит setTextSize от этой базы.
+        for (TextView tv : scaledTexts) {
+            scaledBasePx.add(tv.getTextSize());
+        }
+
+        // ScrollView-обёртка — страховка: если даже ужатый до минимума контент
+        // не влезает (экстремально длинный статус/ошибка), кнопки доступны
+        // скроллом. В обычных случаях скролл не нужен — всё ужимает fitToScreen().
+        scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.addView(root, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        setContentView(scroll);
         refreshStatus();
+        root.post(this::fitToScreen);
     }
 
     @Override
     protected void onStart() {
         super.onStart();
         autoRestoreIfWanted();
+    }
+
+    /** Авто-масштаб главного экрана под высоту дисплея: если контент не влезает
+     *  (длинный статус «куда и через что подключаемся» + 5 кнопок), тексты и
+     *  отступы пропорционально ужимаются (до 0.72 от базы), пока всё не
+     *  поместится. Это настоящий layout-масштаб (не transform): тапы точные,
+     *  виджетов не «размазывает». Если не влезло даже при 0.72 — нижние кнопки
+     *  доступны скроллом (ScrollView-обёртка). */
+    private void fitToScreen() {
+        if (scroll == null || root == null) {
+            return;
+        }
+        int avail = scroll.getHeight();
+        int width = root.getWidth();
+        if (avail <= 0 || width <= 0) {
+            return; // ещё не было первого layout — пересчитает следующий вызов
+        }
+        root.setMinimumHeight(0);
+        // Меряем с РЕАЛЬНОЙ шириной root (иначе TextView не переносит строки и
+        // высота занижается — ужатие не срабатывало).
+        int wms = View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY);
+        for (float k = 1.0f; k > 0.70f; k -= 0.04f) {
+            applyTextScale(k);
+            root.measure(wms, View.MeasureSpec.UNSPECIFIED);
+            if (root.getMeasuredHeight() <= avail) {
+                break;
+            }
+        }
+        root.requestLayout();
+    }
+
+    private void applyTextScale(float k) {
+        for (int i = 0; i < scaledTexts.size(); i++) {
+            scaledTexts.get(i).setTextSize(TypedValue.COMPLEX_UNIT_PX,
+                    scaledBasePx.get(i) * k);
+        }
+        int pad = Math.round(40 * k);
+        root.setPadding(pad, pad, pad, pad);
     }
 
     /** Восстановление VPN при открытии приложения: если до перезапуска/падения/
@@ -368,6 +441,11 @@ public class MainActivity extends Activity {
         // ретраит), а не только при connected: раньше во время штурма реконнектов
         // («влип» в фазу коннекта) выключить VPN с главного экрана было невозможно.
         disconnectButton.setEnabled(isConnected || GrizzlyLandVpnService.serviceActive);
+
+        // Статус мог вырасти/усохнуть — пересчитываем авто-масштаб под экран.
+        if (root != null) {
+            root.post(this::fitToScreen);
+        }
     }
 
     private String modeLabel(String mode) {

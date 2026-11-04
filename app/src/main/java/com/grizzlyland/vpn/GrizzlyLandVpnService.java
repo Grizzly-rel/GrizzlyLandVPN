@@ -397,6 +397,18 @@ public class GrizzlyLandVpnService extends VpnService {
                     ? L10n.s(R.string.log_svc_13)
                     : L10n.s(R.string.log_svc_14));
         }
+        // TunMon (диагностика TUN-fd) следует за флагом «Подробный журнал»
+        // на лету: включили — запускаем (если TUN жив и режим OpenVPN-ный),
+        // выключили — глушим. Только OpenVPN-режимы: TunMon создавался
+        // исключительно для проверки доставки fd в openvpn.
+        boolean ovpnMode = ConfigManager.MODE_OPENVPN.equals(mode)
+                || ConfigManager.MODE_XRAY_OVPN.equals(mode)
+                || ConfigManager.MODE_OVPN_SSH.equals(mode);
+        if (verbose && ovpnMode && connected && vpnInterface != null) {
+            startTunFdMonitor();
+        } else {
+            stopTunFdMonitor();
+        }
     }
 
     /**
@@ -1507,6 +1519,12 @@ public class GrizzlyLandVpnService extends VpnService {
 
     private void startTunFdMonitor() {
         stopTunFdMonitor();
+        // Диагностика нужна только при отладке: при выключенном «Подробном
+        // журнале» нить не запускаем вовсе — в простое она лишь будила CPU
+        // раз в 2с (1800 пробуждений/час) ради строк в журнале.
+        if (config == null || !config.getLogDebug()) {
+            return;
+        }
         final ParcelFileDescriptor pfd = vpnInterface;
         if (pfd == null) {
             return;
