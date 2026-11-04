@@ -125,16 +125,17 @@ public class WgRunner {
         t.start();
     }
 
-    /** Опросчик журнала движка: раз в 0.5с забирает строки в LogStore. */
+    /** Опросчик журнала движка: забирает строки в LogStore. Частота зависит от
+     *  того, открыт ли экран «Логи» (LogStore.hasUiListeners): 1с — живое
+     *  обновление на экране, 3с — фон (экономия батареи: CPU просыпается втрое
+     *  реже, чем при прежнем 1с). Сторож «Failed to send» (серия 90с, разрыв
+     *  серии 60с) полностью работоспособен и при 3с. */
     private void startLogPoller() {
         logPoller = new Thread(() -> {
             while (engineRunning) {
                 drainLogs();
                 try {
-                    // Опрос раз в секунду: буфер движка вмещает 1200 строк
-                    // (переполнение маловероятно), строки не теряются, CPU
-                    // просыпается вдвое реже.
-                    Thread.sleep(1000);
+                    Thread.sleep(LogStore.hasUiListeners() ? 1000 : 3000);
                 } catch (InterruptedException e) {
                     return;
                 }

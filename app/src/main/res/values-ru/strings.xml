@@ -314,6 +314,8 @@
     <string name="log_svc_85">"сменилась сеть: "</string>
     <string name="log_svc_86">" — туннель не пересоздаю (движок переедет сам)"</string>
     <string name="log_svc_87">движок туннеля 90+ с не может отправлять пакеты — пересоздаю туннель</string>
+    <string name="log_svc_88">физическая сеть под туннелем: </string>
+    <string name="log_svc_89">физическая сеть пропала — возвращаю системное поведение по умолчанию</string>
     <string name="log_logs_01">Подробный журнал включён</string>
     <string name="log_logs_02">Подробный журнал выключен</string>
     <string name="log_main_01">"ОШИБКА b64-декода: "</string>

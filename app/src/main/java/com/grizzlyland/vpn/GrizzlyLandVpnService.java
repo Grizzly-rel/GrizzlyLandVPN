@@ -58,6 +58,14 @@ public class GrizzlyLandVpnService extends VpnService {
     public static volatile boolean waitingNetwork = false;
 
     private ParcelFileDescriptor vpnInterface;
+    /** Builder, которым создан текущий TUN (нужен для setUnderlyingNetworks:
+     *  API допускает вызов на Builder и после establish()). Обнуляется вместе
+     *  с vpnInterface в disconnect(). */
+    private volatile android.net.VpnService.Builder vpnBuilder;
+    /** Текущая default-сеть для setUnderlyingNetworks (см. applyUnderlyingNetworks).
+     *  null = «все сети» (системное поведение по умолчанию) — безопасный fallback. */
+    private volatile android.net.Network underlyingDefaultNetwork;
+    private android.net.ConnectivityManager.NetworkCallback underlyingNetCallback;
     private ConfigManager config;
     private XrayRunner xrayRunner = new XrayRunner();
     private OpenVpnRunner openVpnRunner = new OpenVpnRunner();
@@ -239,6 +247,7 @@ public class GrizzlyLandVpnService extends VpnService {
         serviceActive = true;
         installCrashRestart();
         registerConnectivityWatch();
+        registerUnderlyingNetworkCallback();
     }
 
     /** При падении процесса (неперехваченное исключение в любом потоке) система
@@ -479,7 +488,10 @@ public class GrizzlyLandVpnService extends VpnService {
                 // Режимы "только Xray": устанавливаем TUN и отдаём fd Xray.
                 // Если задан пользовательский custom-конфиг — используем его (inbounds
                 // подменяются на tun-вход), иначе собираем конфиг из полей.
-                vpnInterface = buildBuilder(null, 1400, null, null).establish();
+                android.net.VpnService.Builder b = buildBuilder(null, 1400, null, null);
+                vpnInterface = b.establish();
+                vpnBuilder = (vpnInterface != null) ? b : null;
+                applyUnderlyingNetworks();
                 if (vpnInterface != null) {
                     try {
                         String logDir = getFilesDir().getAbsolutePath();
@@ -742,6 +754,92 @@ public class GrizzlyLandVpnService extends VpnService {
         connWatchCallback = null;
     }
 
+    // --------------------------------------------------------------------------
+    // Underlying-сети TUN (экономия батареи)
+    //
+    // Без setUnderlyingNetworks Android считает, что туннель использует ВСЕ сети
+    // сразу, и не усыпляет лишнее радио (Wi-Fi при активных мобильных данных и
+    // наоборот). Явный список из текущей default-сети разрешает системе гасить
+    // неиспользуемые сети и точнее планировать энергосбережение — та же схема,
+    // что в wireguard-android и ics-openvpn.
+    // --------------------------------------------------------------------------
+
+    /** Применяет текущий список underlying-сетей к активному TUN (если он есть). */
+    private void applyUnderlyingNetworks() {
+        android.net.VpnService.Builder b = vpnBuilder;
+        if (b == null || vpnInterface == null) {
+            return;
+        }
+        try {
+            android.net.Network n = underlyingDefaultNetwork;
+            b.setUnderlyingNetworks(n == null ? null : new android.net.Network[]{n});
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** Пассивный трекер default-сети для setUnderlyingNetworks. Ноль поллинга:
+     *  колбэки приходят только при изменениях сети. Наш собственный TUN
+     *  (TRANSPORT_VPN) игнорируется: после establish() default часто становится
+     *  VPN-сеть — подставлять её в underlying нельзя (получился бы цикл). */
+    private void registerUnderlyingNetworkCallback() {
+        if (underlyingNetCallback != null) {
+            return;
+        }
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
+                    getSystemService(CONNECTIVITY_SERVICE);
+            underlyingNetCallback = new android.net.ConnectivityManager.NetworkCallback() {
+                @Override
+                public void onAvailable(android.net.Network network) {
+                    android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+                    if (caps != null
+                            && caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) {
+                        return;
+                    }
+                    underlyingDefaultNetwork = network;
+                    applyUnderlyingNetworks();
+                    LogStore.add("Service", L10n.s(R.string.log_svc_88) + networkLabel(caps));
+                }
+
+                @Override
+                public void onLost(android.net.Network network) {
+                    if (!network.equals(underlyingDefaultNetwork)) {
+                        return;
+                    }
+                    android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+                    if (caps != null
+                            && caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) {
+                        return;
+                    }
+                    if (caps == null) {
+                        // Сеть реально умерла. Если caps != null — сеть жива и просто
+                        // перестала быть default (default стал наш TUN после
+                        // establish()): тогда физическая сеть остаётся в underlying.
+                        underlyingDefaultNetwork = null;
+                        applyUnderlyingNetworks();
+                        LogStore.add("Service", L10n.s(R.string.log_svc_89));
+                    }
+                }
+            };
+            cm.registerDefaultNetworkCallback(underlyingNetCallback);
+        } catch (Exception e) {
+            LogStore.add("Service", "underlying networks callback failed: " + e);
+        }
+    }
+
+    private void unregisterUnderlyingNetworkCallback() {
+        if (underlyingNetCallback == null) {
+            return;
+        }
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
+                    getSystemService(CONNECTIVITY_SERVICE);
+            cm.unregisterNetworkCallback(underlyingNetCallback);
+        } catch (Exception ignored) {
+        }
+        underlyingNetCallback = null;
+    }
+
     /** Запуск режимов с OpenVPN (только OpenVPN / Xray+OpenVPN / OpenVPN-через-SSH). */
     private void startOpenVpnMode(String mode) throws Exception {
         String socks = null;
@@ -852,11 +950,14 @@ public class GrizzlyLandVpnService extends VpnService {
         LogStore.add("Service", L10n.s(R.string.log_svc_55) + cfg.addresses.size()
                 + " peer=" + cfg.peers + " endpoint=" + cfg.endpointForLog
                 + " mtu=" + (cfg.mtu > 0 ? cfg.mtu : 1420));
-        vpnInterface = buildBuilderForWg(cfg).establish();
+        android.net.VpnService.Builder b = buildBuilderForWg(cfg);
+        vpnInterface = b.establish();
         if (vpnInterface == null) {
             handleTunFailure("WG");
             return;
         }
+        vpnBuilder = b;
+        applyUnderlyingNetworks();
         // Владение fd переходит движку: detach, чтобы close() обёртки в
         // disconnect() не закрыл fd, которым владеет wireguard-go.
         final int tunFd = vpnInterface.detachFd();
@@ -922,11 +1023,14 @@ public class GrizzlyLandVpnService extends VpnService {
                 + L10n.s(R.string.log_svc_62) + cfg.jc + " jmin=" + cfg.jmin + " jmax=" + cfg.jmax
                 + " s1=" + cfg.s1 + " s2=" + cfg.s2
                 + " h1=" + cfg.h1 + " h2=" + cfg.h2 + " h3=" + cfg.h3 + " h4=" + cfg.h4);
-        vpnInterface = buildBuilderForAwg(cfg).establish();
+        android.net.VpnService.Builder b = buildBuilderForAwg(cfg);
+        vpnInterface = b.establish();
         if (vpnInterface == null) {
             handleTunFailure("AWG");
             return;
         }
+        vpnBuilder = b;
+        applyUnderlyingNetworks();
         // Владение fd переходит движку: detach, чтобы close() обёртки в
         // disconnect() не закрыл fd, которым владеет amneziawg-go.
         final int tunFd = vpnInterface.detachFd();
@@ -1027,7 +1131,8 @@ public class GrizzlyLandVpnService extends VpnService {
                     LogStore.add("Service", L10n.s(R.string.log_svc_69));
                     return;
                 }
-                ParcelFileDescriptor tun = buildBuilder(null, 1400, null, null).establish();
+                android.net.VpnService.Builder b = buildBuilder(null, 1400, null, null);
+                ParcelFileDescriptor tun = b.establish();
                 if (tun == null) {
                     connected = false;
                     broadcastState();
@@ -1036,11 +1141,14 @@ public class GrizzlyLandVpnService extends VpnService {
                 }
                 holder[0] = tun;
                 vpnInterface = tun;
+                vpnBuilder = b;
+                applyUnderlyingNetworks();
                 if (startEpoch.get() != myEpoch) {
                     LogStore.add("Service", L10n.s(R.string.log_svc_69));
                     closeQuietly(tun);
                     if (vpnInterface == tun) {
                         vpnInterface = null;
+                        vpnBuilder = null;
                     }
                     return;
                 }
@@ -1064,6 +1172,7 @@ public class GrizzlyLandVpnService extends VpnService {
                     closeQuietly(tun);
                     if (vpnInterface == tun) {
                         vpnInterface = null;
+                        vpnBuilder = null;
                     }
                 }
                 stopSelf();
@@ -1357,7 +1466,10 @@ public class GrizzlyLandVpnService extends VpnService {
                                                         java.util.List<String> pushedDns,
                                                         java.util.List<String> pushedRoutes) {
         if (vpnInterface == null) {
-            vpnInterface = buildBuilder(localIp, mtu, pushedDns, pushedRoutes).establish();
+            android.net.VpnService.Builder b = buildBuilder(localIp, mtu, pushedDns, pushedRoutes);
+            vpnInterface = b.establish();
+            vpnBuilder = (vpnInterface != null) ? b : null;
+            applyUnderlyingNetworks();
             if (vpnInterface != null) {
                 connected = true;
                 tunRetryAttempts = 0;
@@ -1557,6 +1669,7 @@ public class GrizzlyLandVpnService extends VpnService {
             }
             vpnInterface = null;
         }
+        vpnBuilder = null;
         // После отключения ПОЛЬЗОВАТЕЛЕМ (кнопка уведомления/UI/плитка, отзыв
         // системой) оставляем в шторке уведомление «VPN отключён» с кнопкой
         // ПОДКЛЮЧИТЬ — как в OpenVPN for Android: из шторки должно быть чем
@@ -1635,6 +1748,7 @@ public class GrizzlyLandVpnService extends VpnService {
         serviceActive = false;
         disconnect();
         unregisterConnectivityWatch();
+        unregisterUnderlyingNetworkCallback();
         super.onDestroy();
     }
 

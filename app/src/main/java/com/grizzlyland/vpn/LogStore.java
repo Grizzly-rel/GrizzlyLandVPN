@@ -58,6 +58,13 @@ public class LogStore {
         }
     }
 
+    /** Жив ли хотя бы один UI-слушатель журнала (экран «Логи» на переднем плане).
+     *  Фоновые поллеры движков по нему разграничивают частоту опроса: чаще при
+     *  открытом экране (живое обновление), реже в фоне (экономия батареи). */
+    public static synchronized boolean hasUiListeners() {
+        return !listeners.isEmpty();
+    }
+
     public static synchronized void removeListener(Listener l) {
         listeners.remove(l);
     }
